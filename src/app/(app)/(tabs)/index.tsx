@@ -28,11 +28,11 @@ export default function HomeScreen() {
       }
     >
       <Text style={s.greeting}>Hello{user?.name ? `, ${user.name}` : ''}</Text>
-      <Text style={s.subtitle}>Welcome to starter-native</Text>
+      <Text style={s.subtitle}>Your GitHub repositories, organised</Text>
       <Card>
-        <Text style={s.cardTitle}>Getting started</Text>
+        <Text style={s.cardTitle}>Connect GitHub</Text>
         <Text style={s.cardBody}>
-          This is a starter template. Replace this content with your app's home screen.
+          Link your GitHub account to start tracking issues and pull requests across your repos.
         </Text>
       </Card>
     </ScrollView>
