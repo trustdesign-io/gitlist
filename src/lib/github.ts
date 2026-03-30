@@ -389,6 +389,217 @@ export function groupTasksByStatus(tasks: Task[]): BoardColumn[] {
 }
 
 // ---------------------------------------------------------------------------
+// Task detail
+// ---------------------------------------------------------------------------
+
+export interface TaskDetail {
+  id: string
+  title: string
+  body: string | null
+  isDraft: boolean
+  issueNumber: number | null
+  issueState: 'OPEN' | 'CLOSED' | null
+  issueUrl: string | null
+  author: string | null
+  createdAt: string
+  updatedAt: string
+  status: string | null
+  /** From "Priority" single-select field if present */
+  priority: string | null
+  /** From "Due Date" date field if present */
+  dueDate: string | null
+  assignees: TaskAssignee[]
+  labels: TaskLabel[]
+}
+
+interface TaskDetailFieldValue {
+  field?: { name?: string }
+  name?: string
+  optionId?: string
+  date?: string
+  text?: string
+  number?: number
+}
+
+type TaskDetailContent =
+  | {
+      __typename: 'Issue'
+      title: string
+      number: number
+      state: 'OPEN' | 'CLOSED'
+      url: string
+      body: string | null
+      createdAt: string
+      updatedAt: string
+      author: { login: string } | null
+      assignees: { nodes: { login: string; avatarUrl: string }[] }
+      labels: { nodes: { name: string; color: string }[] }
+    }
+  | {
+      __typename: 'DraftIssue'
+      title: string
+      body: string | null
+      createdAt: string
+      updatedAt: string
+      creator: { login: string } | null
+      assignees: { nodes: { login: string; avatarUrl: string }[] }
+    }
+  | null
+
+interface FetchTaskDetailResponse {
+  node: {
+    id: string
+    fieldValues: { nodes: TaskDetailFieldValue[] }
+    content: TaskDetailContent
+  } | null
+}
+
+const FETCH_TASK_DETAIL_QUERY = `
+  query FetchTaskDetail($itemId: ID!) {
+    node(id: $itemId) {
+      ... on ProjectV2Item {
+        id
+        fieldValues(first: 20) {
+          nodes {
+            ... on ProjectV2ItemFieldSingleSelectValue {
+              field { ... on ProjectV2SingleSelectField { name } }
+              name
+              optionId
+            }
+            ... on ProjectV2ItemFieldDateValue {
+              field { ... on ProjectV2FieldCommon { name } }
+              date
+            }
+            ... on ProjectV2ItemFieldTextValue {
+              field { ... on ProjectV2FieldCommon { name } }
+              text
+            }
+            ... on ProjectV2ItemFieldNumberValue {
+              field { ... on ProjectV2FieldCommon { name } }
+              number
+            }
+          }
+        }
+        content {
+          ... on Issue {
+            __typename
+            title
+            number
+            state
+            url
+            body
+            createdAt
+            updatedAt
+            author { login }
+            assignees(first: 10) { nodes { login avatarUrl } }
+            labels(first: 10) { nodes { name color } }
+          }
+          ... on DraftIssue {
+            __typename
+            title
+            body
+            createdAt
+            updatedAt
+            creator { login }
+            assignees(first: 10) { nodes { login avatarUrl } }
+          }
+        }
+      }
+    }
+  }
+`
+
+function findFieldValue(
+  nodes: TaskDetailFieldValue[],
+  fieldName: string
+): TaskDetailFieldValue | undefined {
+  return nodes.find((n) => n.field?.name?.toLowerCase() === fieldName.toLowerCase())
+}
+
+/**
+ * Fetch full detail for a single ProjectV2 item by its node ID.
+ */
+export async function fetchTaskDetail(pat: string, itemId: string): Promise<TaskDetail> {
+  const data = await githubGraphQL<FetchTaskDetailResponse>(pat, FETCH_TASK_DETAIL_QUERY, {
+    itemId,
+  })
+
+  if (!data.node) {
+    throw new Error('Task not found')
+  }
+
+  const { fieldValues, content } = data.node
+  const fieldNodes = fieldValues.nodes
+
+  const statusField = findFieldValue(fieldNodes, 'status')
+  const priorityField = findFieldValue(fieldNodes, 'priority')
+  const dueDateField = findFieldValue(fieldNodes, 'due date')
+
+  const status = statusField?.name ?? null
+  const priority = priorityField?.name ?? null
+  const dueDate = dueDateField?.date ?? null
+
+  if (!content) {
+    return {
+      id: data.node.id,
+      title: '(No title)',
+      body: null,
+      isDraft: true,
+      issueNumber: null,
+      issueState: null,
+      issueUrl: null,
+      author: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status,
+      priority,
+      dueDate,
+      assignees: [],
+      labels: [],
+    }
+  }
+
+  if (content.__typename === 'Issue') {
+    return {
+      id: data.node.id,
+      title: content.title,
+      body: content.body,
+      isDraft: false,
+      issueNumber: content.number,
+      issueState: content.state,
+      issueUrl: content.url,
+      author: content.author?.login ?? null,
+      createdAt: content.createdAt,
+      updatedAt: content.updatedAt,
+      status,
+      priority,
+      dueDate,
+      assignees: content.assignees.nodes,
+      labels: content.labels.nodes,
+    }
+  }
+
+  // DraftIssue
+  return {
+    id: data.node.id,
+    title: content.title,
+    body: content.body,
+    isDraft: true,
+    issueNumber: null,
+    issueState: null,
+    issueUrl: null,
+    author: content.creator?.login ?? null,
+    createdAt: content.createdAt,
+    updatedAt: content.updatedAt,
+    status,
+    priority,
+    dueDate,
+    assignees: content.assignees.nodes,
+    labels: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 /** Execute a GraphQL query against the GitHub API using a PAT. */
 export async function githubGraphQL<T>(
