@@ -9,7 +9,7 @@ export default function BoardsScreen() {
   return (
     <View style={s.container}>
       <Text style={s.title}>Boards</Text>
-      <Text style={s.body}>Your GitHub repo boards will appear here.</Text>
+      <Text style={s.body}>Your GitHub project boards will appear here.</Text>
     </View>
   )
 }
