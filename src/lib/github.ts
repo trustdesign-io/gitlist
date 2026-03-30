@@ -147,6 +147,249 @@ export async function validatePAT(pat: string): Promise<ValidatePATResult> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Board items (task list)
+// ---------------------------------------------------------------------------
+
+export interface TaskAssignee {
+  login: string
+  avatarUrl: string
+}
+
+export interface TaskLabel {
+  name: string
+  color: string
+}
+
+export interface Task {
+  id: string
+  title: string
+  /** Resolved status name from the Status single-select field, or null */
+  status: string | null
+  statusOptionId: string | null
+  assignees: TaskAssignee[]
+  labels: TaskLabel[]
+  /** Null for DraftIssues */
+  issueNumber: number | null
+  issueState: 'OPEN' | 'CLOSED' | null
+  isDraft: boolean
+}
+
+export interface BoardColumn {
+  name: string
+  tasks: Task[]
+}
+
+/** Status field option as returned by the GraphQL API */
+interface StatusOption {
+  id: string
+  name: string
+  color: string
+}
+
+interface FieldNode {
+  id?: string
+  name?: string
+  options?: StatusOption[]
+}
+
+interface FieldValueNode {
+  field?: { name?: string }
+  name?: string
+  optionId?: string
+}
+
+type ItemContent =
+  | {
+      __typename: 'Issue'
+      title: string
+      number: number
+      state: 'OPEN' | 'CLOSED'
+      url: string
+      assignees: { nodes: { login: string; avatarUrl: string }[] }
+      labels: { nodes: { name: string; color: string }[] }
+    }
+  | { __typename: 'DraftIssue'; title: string }
+  | null
+
+interface ItemNode {
+  id: string
+  fieldValues: { nodes: FieldValueNode[] }
+  content: ItemContent
+}
+
+interface FetchBoardItemsResponse {
+  node: {
+    title: string
+    fields: { nodes: FieldNode[] }
+    items: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null }
+      nodes: ItemNode[]
+    }
+  }
+}
+
+const FETCH_BOARD_ITEMS_QUERY = `
+  query FetchBoardItems($projectId: ID!, $cursor: String) {
+    node(id: $projectId) {
+      ... on ProjectV2 {
+        title
+        fields(first: 20) {
+          nodes {
+            ... on ProjectV2SingleSelectField {
+              id
+              name
+              options { id name color }
+            }
+          }
+        }
+        items(first: 50, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id
+            fieldValues(first: 20) {
+              nodes {
+                ... on ProjectV2ItemFieldSingleSelectValue {
+                  field { ... on ProjectV2SingleSelectField { name } }
+                  name
+                  optionId
+                }
+              }
+            }
+            content {
+              ... on Issue {
+                __typename
+                title
+                number
+                state
+                url
+                assignees(first: 5) { nodes { login avatarUrl } }
+                labels(first: 5) { nodes { name color } }
+              }
+              ... on DraftIssue {
+                __typename
+                title
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
+function mapItem(item: ItemNode): Task {
+  const statusFieldValue = item.fieldValues.nodes.find(
+    (fv) => fv.field?.name?.toLowerCase() === 'status' && fv.name != null
+  )
+
+  const content = item.content
+
+  if (!content) {
+    return {
+      id: item.id,
+      title: '(No title)',
+      status: statusFieldValue?.name ?? null,
+      statusOptionId: statusFieldValue?.optionId ?? null,
+      assignees: [],
+      labels: [],
+      issueNumber: null,
+      issueState: null,
+      isDraft: true,
+    }
+  }
+
+  if (content.__typename === 'Issue') {
+    return {
+      id: item.id,
+      title: content.title,
+      status: statusFieldValue?.name ?? null,
+      statusOptionId: statusFieldValue?.optionId ?? null,
+      assignees: content.assignees.nodes,
+      labels: content.labels.nodes,
+      issueNumber: content.number,
+      issueState: content.state,
+      isDraft: false,
+    }
+  }
+
+  // DraftIssue
+  return {
+    id: item.id,
+    title: content.title,
+    status: statusFieldValue?.name ?? null,
+    statusOptionId: statusFieldValue?.optionId ?? null,
+    assignees: [],
+    labels: [],
+    issueNumber: null,
+    issueState: null,
+    isDraft: true,
+  }
+}
+
+/**
+ * Fetch all items from a ProjectV2 board using cursor-based pagination.
+ * Resolves status field option names so each task has a human-readable status.
+ */
+export async function fetchBoardItems(pat: string, projectId: string): Promise<Task[]> {
+  const tasks: Task[] = []
+  let cursor: string | null = null
+  let hasNextPage = true
+
+  while (hasNextPage) {
+    const variables: Record<string, unknown> = { projectId }
+    if (cursor) variables.cursor = cursor
+
+    const data = await githubGraphQL<FetchBoardItemsResponse>(
+      pat,
+      FETCH_BOARD_ITEMS_QUERY,
+      variables
+    )
+
+    const page = data.node.items
+    for (const item of page.nodes) {
+      tasks.push(mapItem(item))
+    }
+
+    hasNextPage = page.pageInfo.hasNextPage
+    cursor = page.pageInfo.endCursor
+  }
+
+  return tasks
+}
+
+/**
+ * Group a flat list of tasks into columns ordered by first-seen status.
+ * Tasks with no status are collected in a trailing "No Status" column.
+ */
+export function groupTasksByStatus(tasks: Task[]): BoardColumn[] {
+  const columnMap = new Map<string, Task[]>()
+
+  for (const task of tasks) {
+    const key = task.status ?? 'No Status'
+    if (!columnMap.has(key)) {
+      columnMap.set(key, [])
+    }
+    columnMap.get(key)!.push(task)
+  }
+
+  const columns: BoardColumn[] = []
+  for (const [name, columnTasks] of columnMap) {
+    if (name !== 'No Status') {
+      columns.push({ name, tasks: columnTasks })
+    }
+  }
+
+  const noStatus = columnMap.get('No Status')
+  if (noStatus && noStatus.length > 0) {
+    columns.push({ name: 'No Status', tasks: noStatus })
+  }
+
+  return columns
+}
+
+// ---------------------------------------------------------------------------
+
 /** Execute a GraphQL query against the GitHub API using a PAT. */
 export async function githubGraphQL<T>(
   pat: string,
