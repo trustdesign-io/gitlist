@@ -392,6 +392,15 @@ export function groupTasksByStatus(tasks: Task[]): BoardColumn[] {
 // Task detail
 // ---------------------------------------------------------------------------
 
+/** A single field value as returned from the board, normalised for the UI. */
+export interface RawFieldValue {
+  fieldName: string
+  /** Human-readable display value (option name, date string, text, number). */
+  value: string | null
+  /** Option ID — only set for SINGLE_SELECT fields; used when sending updates. */
+  optionId: string | null
+}
+
 export interface TaskDetail {
   id: string
   title: string
@@ -410,6 +419,8 @@ export interface TaskDetail {
   dueDate: string | null
   assignees: TaskAssignee[]
   labels: TaskLabel[]
+  /** All field values from the board, keyed by field name. */
+  rawFields: RawFieldValue[]
 }
 
 interface TaskDetailFieldValue {
@@ -539,6 +550,22 @@ export async function fetchTaskDetail(pat: string, itemId: string): Promise<Task
   const priority = priorityField?.name ?? null
   const dueDate = dueDateField?.date ?? null
 
+  // Build a normalised list of all field values for the dynamic fields UI
+  const rawFields: RawFieldValue[] = fieldNodes
+    .filter((n) => n.field?.name)
+    .map((n) => {
+      const fieldName = n.field!.name!
+      if (n.name != null) {
+        // SINGLE_SELECT — n.name is the option label, n.optionId is the option ID
+        return { fieldName, value: n.name, optionId: n.optionId ?? null }
+      }
+      if (n.date != null) return { fieldName, value: n.date, optionId: null }
+      if (n.text != null) return { fieldName, value: n.text, optionId: null }
+      if (n.number != null) return { fieldName, value: String(n.number), optionId: null }
+      return { fieldName, value: null, optionId: null }
+    })
+    .filter((f) => f.value !== null)
+
   if (!content) {
     return {
       id: data.node.id,
@@ -556,6 +583,7 @@ export async function fetchTaskDetail(pat: string, itemId: string): Promise<Task
       dueDate,
       assignees: [],
       labels: [],
+      rawFields,
     }
   }
 
@@ -576,6 +604,7 @@ export async function fetchTaskDetail(pat: string, itemId: string): Promise<Task
       dueDate,
       assignees: content.assignees.nodes,
       labels: content.labels.nodes,
+      rawFields,
     }
   }
 
@@ -596,6 +625,7 @@ export async function fetchTaskDetail(pat: string, itemId: string): Promise<Task
     dueDate,
     assignees: content.assignees.nodes,
     labels: [],
+    rawFields,
   }
 }
 

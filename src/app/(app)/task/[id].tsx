@@ -6,18 +6,40 @@ import {
   Pressable,
   ActivityIndicator,
   Linking,
+  Modal,
+  TextInput as RNTextInput,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import Markdown from 'react-native-markdown-display'
 import Ionicons from '@expo/vector-icons/Ionicons'
+import * as Haptics from 'expo-haptics'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, fontSize, spacing, borderRadius } from '@trustdesign/shared/tokens'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { useCurrentUser } from '../../../hooks/use-current-user'
 import { fetchGithubPAT } from '../../../lib/github-pat'
-import { fetchTaskDetail, type TaskDetail, type TaskAssignee, type TaskLabel } from '../../../lib/github'
+import {
+  fetchTaskDetail,
+  type TaskDetail,
+  type TaskAssignee,
+  type TaskLabel,
+  type RawFieldValue,
+} from '../../../lib/github'
+import { updateFieldValue, type FieldMapping, type FieldOption } from '../../../lib/board-fields'
 import { useTasksStore } from '../../../stores/tasks-store'
+import { useFieldsStore } from '../../../stores/fields-store'
 import { Avatar } from '../../../components/ui/Avatar'
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Fields that are shown elsewhere in the UI and should not appear in the dynamic section. */
+const EXCLUDED_FIELD_NAMES = new Set(['title', 'status', 'assignees', 'labels'])
 
 // ---------------------------------------------------------------------------
 // Label chip
@@ -112,7 +134,7 @@ const assigneesRowStyles = StyleSheet.create({
 })
 
 // ---------------------------------------------------------------------------
-// Metadata row (priority / due date)
+// Metadata row (read-only, for created/updated dates)
 // ---------------------------------------------------------------------------
 
 interface MetaItemProps {
@@ -151,6 +173,364 @@ function metaItemStyles(theme: ReturnType<typeof useTheme>['theme']) {
 }
 
 // ---------------------------------------------------------------------------
+// Field editor modal
+// ---------------------------------------------------------------------------
+
+interface EditFieldModalProps {
+  mapping: FieldMapping
+  currentValue: RawFieldValue | undefined
+  onConfirm: (value: string, optionId?: string) => Promise<void>
+  onClose: () => void
+  theme: ReturnType<typeof useTheme>['theme']
+}
+
+function EditFieldModal({ mapping, currentValue, onConfirm, onClose, theme }: EditFieldModalProps) {
+  const [inputValue, setInputValue] = useState(currentValue?.value ?? '')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const insets = useSafeAreaInsets()
+  const s = useMemo(() => modalStyles(theme), [theme])
+
+  const handleSelectOption = async (option: FieldOption) => {
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      await onConfirm(option.name, option.id)
+      await Haptics.selectionAsync()
+      onClose()
+    } catch {
+      setSaveError('Failed to update. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleTextConfirm = async () => {
+    if (!inputValue.trim()) return
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      await onConfirm(inputValue.trim())
+      await Haptics.selectionAsync()
+      onClose()
+    } catch {
+      setSaveError('Failed to update. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      visible
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+      accessibilityViewIsModal
+    >
+      <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={s.sheetWrapper}
+      >
+        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
+          {/* Handle */}
+          <View style={s.handle} />
+
+          {/* Header */}
+          <View style={s.header}>
+            <Text style={s.fieldName}>{mapping.field.name}</Text>
+            <Pressable
+              onPress={onClose}
+              style={s.closeButton}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={s.closeLabel}>Cancel</Text>
+            </Pressable>
+          </View>
+
+          {saveError != null && (
+            <View style={s.errorBanner}>
+              <Text style={s.errorText}>{saveError}</Text>
+            </View>
+          )}
+
+          {/* Content per control type */}
+          {mapping.control === 'single-select-picker' && (
+            <FlatList
+              data={mapping.field.options}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => {
+                const isSelected = item.id === currentValue?.optionId
+                return (
+                  <Pressable
+                    style={[s.optionRow, isSelected && s.optionRowSelected]}
+                    onPress={() => !isSaving && void handleSelectOption(item)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={item.name}
+                  >
+                    <Text style={[s.optionLabel, isSelected && s.optionLabelSelected]}>
+                      {item.name}
+                    </Text>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={18} color={theme.colors.primary} />
+                    )}
+                    {isSaving && isSelected && (
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                    )}
+                  </Pressable>
+                )
+              }}
+              style={s.optionList}
+            />
+          )}
+
+          {(mapping.control === 'text-input' ||
+            mapping.control === 'number-input' ||
+            mapping.control === 'date-input') && (
+            <View style={s.textInputSection}>
+              <RNTextInput
+                style={s.textInput}
+                value={inputValue}
+                onChangeText={setInputValue}
+                placeholder={
+                  mapping.control === 'date-input'
+                    ? 'YYYY-MM-DD'
+                    : `Enter ${mapping.field.name.toLowerCase()}…`
+                }
+                placeholderTextColor={theme.colors.mutedForeground}
+                keyboardType={mapping.control === 'number-input' ? 'numeric' : 'default'}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleTextConfirm}
+                accessibilityLabel={mapping.field.name}
+              />
+              <Pressable
+                style={[s.saveButton, isSaving && s.saveButtonDisabled]}
+                onPress={handleTextConfirm}
+                disabled={isSaving}
+                accessibilityRole="button"
+                accessibilityLabel="Save"
+              >
+                {isSaving ? (
+                  <ActivityIndicator color={colors.surface.background} size="small" />
+                ) : (
+                  <Text style={s.saveLabel}>Save</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+
+          {mapping.control === 'read-only' && (
+            <View style={s.readOnlyNote}>
+              <Text style={s.readOnlyText}>
+                This field type cannot be edited in the app. Open in GitHub to make changes.
+              </Text>
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  )
+}
+
+function modalStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    sheetWrapper: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: theme.colors.card,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      maxHeight: '75%',
+    },
+    handle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.colors.border,
+      alignSelf: 'center',
+      marginTop: spacing[3],
+      marginBottom: spacing[2],
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing[5],
+      paddingBottom: spacing[3],
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    fieldName: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      fontWeight: '700',
+      color: theme.colors.foreground,
+    },
+    closeButton: { paddingVertical: spacing[1], paddingLeft: spacing[4] },
+    closeLabel: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      color: theme.colors.primary,
+    },
+    errorBanner: {
+      backgroundColor: theme.colors.error,
+      paddingHorizontal: spacing[5],
+      paddingVertical: spacing[2],
+    },
+    errorText: {
+      color: colors.surface.background,
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+    },
+    optionList: { flexGrow: 0 },
+    optionRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: spacing[4],
+      paddingHorizontal: spacing[5],
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    optionRowSelected: {
+      backgroundColor: theme.colors.primary + '0d',
+    },
+    optionLabel: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      color: theme.colors.foreground,
+      flex: 1,
+    },
+    optionLabelSelected: {
+      color: theme.colors.primary,
+      fontWeight: '600',
+    },
+    textInputSection: {
+      padding: spacing[5],
+      gap: spacing[3],
+    },
+    textInput: {
+      backgroundColor: theme.colors.input,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[3],
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      color: theme.colors.foreground,
+      minHeight: 48,
+    },
+    saveButton: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: borderRadius.xl,
+      paddingVertical: spacing[3],
+      alignItems: 'center',
+      minHeight: 48,
+      justifyContent: 'center',
+    },
+    saveButtonDisabled: {
+      opacity: 0.5,
+    },
+    saveLabel: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      fontWeight: '600',
+      color: colors.surface.background,
+    },
+    readOnlyNote: {
+      padding: spacing[5],
+    },
+    readOnlyText: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic field row
+// ---------------------------------------------------------------------------
+
+interface FieldRowProps {
+  mapping: FieldMapping
+  rawField: RawFieldValue | undefined
+  onPress: () => void
+  theme: ReturnType<typeof useTheme>['theme']
+}
+
+function FieldRow({ mapping, rawField, onPress, theme }: FieldRowProps) {
+  const isEditable = mapping.control !== 'read-only'
+  const s = useMemo(() => fieldRowStyles(theme), [theme])
+
+  return (
+    <Pressable
+      style={[s.row, !isEditable && s.rowReadOnly]}
+      onPress={isEditable ? onPress : undefined}
+      accessibilityRole={isEditable ? 'button' : 'text'}
+      accessibilityLabel={`${mapping.field.name}: ${rawField?.value ?? 'Not set'}`}
+    >
+      <Text style={s.label}>{mapping.field.name}</Text>
+      <View style={s.valueRow}>
+        <Text style={[s.value, rawField?.value == null && s.valueEmpty]}>
+          {rawField?.value ?? 'Not set'}
+        </Text>
+        {isEditable && (
+          <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedForeground} />
+        )}
+      </View>
+    </Pressable>
+  )
+}
+
+function fieldRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: spacing[3],
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    rowReadOnly: { opacity: 0.7 },
+    label: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+      fontWeight: '500',
+      flex: 1,
+    },
+    valueRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[1],
+      flexShrink: 1,
+    },
+    value: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.foreground,
+      fontWeight: '500',
+      textAlign: 'right',
+    },
+    valueEmpty: {
+      color: theme.colors.mutedForeground,
+      fontStyle: 'italic',
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 
@@ -162,10 +542,14 @@ export default function TaskDetailScreen() {
   const navigation = useNavigation()
 
   const tasksByBoard = useTasksStore((state) => state.tasksByBoard)
+  const fieldsByBoard = useFieldsStore((state) => state.fieldsByBoard)
 
   const [detail, setDetail] = useState<TaskDetail | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activeFieldMapping, setActiveFieldMapping] = useState<FieldMapping | null>(null)
+
+  const fieldMappings = boardId ? (fieldsByBoard[boardId] ?? []) : []
 
   // Try to bootstrap from store first (avoids a network call if board was already loaded)
   const cachedTask = useMemo(() => {
@@ -201,12 +585,52 @@ export default function TaskDetailScreen() {
   }, [id, user?.id, navigation])
 
   useEffect(() => {
-    // Set initial title from store cache while we fetch full detail
     if (cachedTask) {
       navigation.setOptions({ title: cachedTask.title })
     }
     void loadDetail()
   }, [cachedTask, loadDetail, navigation])
+
+  const handleFieldChange = useCallback(
+    async (mapping: FieldMapping, newValue: string, optionId?: string) => {
+      if (!id || !boardId || !user?.id) return
+
+      const pat = await fetchGithubPAT(user.id)
+      if (!pat) throw new Error('Could not retrieve GitHub token.')
+
+      let updateVal: Parameters<typeof updateFieldValue>[4]
+      if (mapping.control === 'single-select-picker' && optionId) {
+        updateVal = { singleSelectOptionId: optionId }
+      } else if (mapping.control === 'date-input') {
+        updateVal = { date: newValue }
+      } else if (mapping.control === 'number-input') {
+        updateVal = { number: parseFloat(newValue) }
+      } else {
+        updateVal = { text: newValue }
+      }
+
+      await updateFieldValue(pat, boardId, id, mapping.field.id, updateVal)
+
+      // Update local state optimistically after confirmed save
+      setDetail((prev) => {
+        if (!prev) return prev
+        const updated = prev.rawFields.map((f) =>
+          f.fieldName === mapping.field.name
+            ? { ...f, value: newValue, optionId: optionId ?? null }
+            : f
+        )
+        // Add the field if it wasn't in rawFields yet
+        const exists = prev.rawFields.some((f) => f.fieldName === mapping.field.name)
+        return {
+          ...prev,
+          rawFields: exists
+            ? updated
+            : [...prev.rawFields, { fieldName: mapping.field.name, value: newValue, optionId: optionId ?? null }],
+        }
+      })
+    },
+    [id, boardId, user?.id]
+  )
 
   const s = useMemo(() => styles(theme), [theme])
   const markdownStyles = useMemo(() => buildMarkdownStyles(theme), [theme])
@@ -251,109 +675,129 @@ export default function TaskDetailScreen() {
     }
   }
 
-  return (
-    <ScrollView
-      style={s.container}
-      contentContainerStyle={s.content}
-    >
-      {/* Title */}
-      <Text style={s.title}>{detail.title}</Text>
+  // Fields to show in the dynamic section: all board fields except system/already-shown ones
+  const dynamicFields = fieldMappings.filter(
+    (m) => !EXCLUDED_FIELD_NAMES.has(m.field.name.toLowerCase())
+  )
 
-      {/* Status + draft badge */}
-      <View style={s.badgeRow}>
-        {detail.status != null && <StatusBadge status={detail.status} />}
-        {detail.isDraft && (
-          <View style={s.draftBadge}>
-            <Text style={s.draftLabel}>Draft</Text>
+  return (
+    <>
+      <ScrollView style={s.container} contentContainerStyle={s.content}>
+        {/* Title */}
+        <Text style={s.title}>{detail.title}</Text>
+
+        {/* Status + draft badge */}
+        <View style={s.badgeRow}>
+          {detail.status != null && <StatusBadge status={detail.status} />}
+          {detail.isDraft && (
+            <View style={s.draftBadge}>
+              <Text style={s.draftLabel}>Draft</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Labels */}
+        {detail.labels.length > 0 && (
+          <View style={s.labelsRow}>
+            {detail.labels.map((label: TaskLabel) => (
+              <LabelChip key={label.name} name={label.name} color={label.color} />
+            ))}
           </View>
         )}
-      </View>
 
-      {/* Labels */}
-      {detail.labels.length > 0 && (
-        <View style={s.labelsRow}>
-          {detail.labels.map((label: TaskLabel) => (
-            <LabelChip key={label.name} name={label.name} color={label.color} />
-          ))}
-        </View>
-      )}
+        {/* Assignees */}
+        {detail.assignees.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>Assignees</Text>
+            <AssigneesRow assignees={detail.assignees} />
+          </View>
+        )}
 
-      {/* Assignees */}
-      {detail.assignees.length > 0 && (
-        <View style={s.section}>
-          <Text style={s.sectionLabel}>Assignees</Text>
-          <AssigneesRow assignees={detail.assignees} />
-        </View>
-      )}
+        {/* Issue link */}
+        {!detail.isDraft && detail.issueUrl != null && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>Linked issue</Text>
+            <Pressable
+              onPress={() => {
+                if (detail.issueUrl) {
+                  void Linking.openURL(detail.issueUrl)
+                }
+              }}
+              accessibilityRole="link"
+              accessibilityLabel={`Open issue #${detail.issueNumber ?? ''} on GitHub`}
+              style={s.issueLink}
+            >
+              <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
+              <Text style={s.issueLinkText}>
+                #{detail.issueNumber} · {detail.issueState ?? 'OPEN'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
-      {/* Issue link */}
-      {!detail.isDraft && detail.issueUrl != null && (
-        <View style={s.section}>
-          <Text style={s.sectionLabel}>Linked issue</Text>
-          <Pressable
-            onPress={() => {
-              if (detail.issueUrl) {
-                void Linking.openURL(detail.issueUrl)
-              }
-            }}
-            accessibilityRole="link"
-            accessibilityLabel={`Open issue #${detail.issueNumber ?? ''} on GitHub`}
-            style={s.issueLink}
-          >
-            <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
-            <Text style={s.issueLinkText}>
-              #{detail.issueNumber} · {detail.issueState ?? 'OPEN'}
-            </Text>
-          </Pressable>
-        </View>
-      )}
+        {/* Dynamic fields section */}
+        {dynamicFields.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>Fields</Text>
+            <View style={s.fieldsCard}>
+              {dynamicFields.map((mapping) => {
+                const rawField = detail.rawFields.find(
+                  (f) => f.fieldName.toLowerCase() === mapping.field.name.toLowerCase()
+                )
+                return (
+                  <FieldRow
+                    key={mapping.field.id}
+                    mapping={mapping}
+                    rawField={rawField}
+                    theme={theme}
+                    onPress={() => setActiveFieldMapping(mapping)}
+                  />
+                )
+              })}
+            </View>
+          </View>
+        )}
 
-      {/* Metadata grid (priority + due date) */}
-      {(detail.priority != null || detail.dueDate != null) && (
+        {/* Timestamps */}
         <View style={s.metaGrid}>
-          {detail.priority != null && (
-            <MetaItem
-              icon="flag-outline"
-              label="Priority"
-              value={detail.priority}
-              theme={theme}
-            />
-          )}
-          {detail.dueDate != null && (
-            <MetaItem
-              icon="calendar-outline"
-              label="Due"
-              value={formattedDate(detail.dueDate)}
-              theme={theme}
-            />
-          )}
+          <MetaItem
+            icon="time-outline"
+            label="Created"
+            value={formattedDate(detail.createdAt)}
+            theme={theme}
+          />
+          <MetaItem
+            icon="pencil-outline"
+            label="Updated"
+            value={formattedDate(detail.updatedAt)}
+            theme={theme}
+          />
         </View>
-      )}
 
-      {/* Dates */}
-      <View style={s.metaGrid}>
-        <MetaItem
-          icon="time-outline"
-          label="Created"
-          value={formattedDate(detail.createdAt)}
+        {/* Body (markdown) */}
+        {detail.body != null && detail.body.trim().length > 0 && (
+          <View style={s.bodySection}>
+            <Text style={s.sectionLabel}>Description</Text>
+            <Markdown style={markdownStyles}>{detail.body}</Markdown>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Field editor modal */}
+      {activeFieldMapping != null && (
+        <EditFieldModal
+          mapping={activeFieldMapping}
+          currentValue={detail.rawFields.find(
+            (f) => f.fieldName.toLowerCase() === activeFieldMapping.field.name.toLowerCase()
+          )}
+          onConfirm={async (value, optionId) => {
+            await handleFieldChange(activeFieldMapping, value, optionId)
+          }}
+          onClose={() => setActiveFieldMapping(null)}
           theme={theme}
         />
-        <MetaItem
-          icon="pencil-outline"
-          label="Updated"
-          value={formattedDate(detail.updatedAt)}
-          theme={theme}
-        />
-      </View>
-
-      {/* Body (markdown) */}
-      {detail.body != null && detail.body.trim().length > 0 && (
-        <View style={s.bodySection}>
-          <Text style={s.sectionLabel}>Description</Text>
-          <Markdown style={markdownStyles}>{detail.body}</Markdown>
-        </View>
       )}
-    </ScrollView>
+    </>
   )
 }
 
@@ -406,7 +850,6 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     section: {
       marginBottom: spacing[4],
-      gap: spacing[2],
     },
     sectionLabel: {
       fontSize: fontSize.xs.size,
@@ -415,7 +858,15 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
       color: theme.colors.mutedForeground,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
-      marginBottom: spacing[1],
+      marginBottom: spacing[2],
+    },
+    fieldsCard: {
+      backgroundColor: theme.colors.card,
+      borderRadius: borderRadius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+      overflow: 'hidden',
+      paddingHorizontal: spacing[4],
     },
     issueLink: {
       flexDirection: 'row',

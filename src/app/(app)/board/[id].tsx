@@ -27,7 +27,9 @@ import {
   type BoardColumn,
   type Task,
 } from '../../../lib/github'
+import { fetchBoardFields } from '../../../lib/board-fields'
 import { useTasksStore } from '../../../stores/tasks-store'
+import { useFieldsStore } from '../../../stores/fields-store'
 import { getCached, setCached } from '../../../lib/cache'
 import { useBoardsStore } from '../../../stores/boards-store'
 import { Avatar } from '../../../components/ui/Avatar'
@@ -424,6 +426,7 @@ export default function BoardScreen() {
     removeTask,
     replaceTask,
   } = useTasksStore()
+  const setFields = useFieldsStore((state) => state.setFields)
   const boards = useBoardsStore((state) => state.boards)
 
   const tasks = id ? (tasksByBoard[id] ?? null) : null
@@ -451,9 +454,13 @@ export default function BoardScreen() {
         setError('Could not retrieve your GitHub token. Try relinking your account.')
         return
       }
-      const result = await fetchBoardItems(pat, id)
+      const [result, fields] = await Promise.all([
+        fetchBoardItems(pat, id),
+        fetchBoardFields(pat, user.id, id),
+      ])
       setCached(['tasks', user.id, id], result)
       setTasks(id, result)
+      setFields(id, fields)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       if (message.includes('401') || message.toLowerCase().includes('expired')) {
@@ -466,7 +473,7 @@ export default function BoardScreen() {
         setError(`Failed to load tasks: ${message}`)
       }
     }
-  }, [id, user?.id, setTasks, setLoading, setError])
+  }, [id, user?.id, setTasks, setLoading, setError, setFields])
 
   useEffect(() => {
     void loadTasks()
