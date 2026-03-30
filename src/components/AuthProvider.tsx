@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { Linking } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { handleAuthDeepLink } from '../lib/deep-links'
+import { loadGithubAccountMeta } from '../lib/github-pat'
 import { useAuthStore } from '../stores/auth-store'
+import { useGithubStore } from '../stores/github-store'
 import { sentryIdentifyUser, sentryClearUser } from '../lib/sentry'
 import type { User } from '../types'
 
@@ -12,10 +14,23 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const setUser = useAuthStore((state) => state.setUser)
+  const { setGithubAccount } = useGithubStore()
+
+  const loadGithubAccount = useCallback(
+    async (userId: string) => {
+      try {
+        const account = await loadGithubAccountMeta(userId)
+        setGithubAccount(account?.githubUsername ?? null)
+      } catch {
+        setGithubAccount(null)
+      }
+    },
+    [setGithubAccount]
+  )
 
   useEffect(() => {
     // Check current session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         // Map Supabase auth user to our User type
         const user: User = {
@@ -29,12 +44,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           updatedAt: new Date(),
         }
         setUser(user)
+        await loadGithubAccount(session.user.id)
       } else {
         setUser(null)
+        setGithubAccount(null)
       }
     }).catch((error) => {
       console.warn('Failed to get session:', error)
       setUser(null) // Ensure loading state resolves even on error
+      setGithubAccount(null)
     })
 
     // Handle deep links that arrive while the app is already running.
@@ -75,11 +93,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setUser(user)
           if (event === 'SIGNED_IN') {
             sentryIdentifyUser(session.user.id, session.user.email ?? '')
+            loadGithubAccount(session.user.id).catch(() => {})
           }
         } else {
           setUser(null)
           if (event === 'SIGNED_OUT') {
             sentryClearUser()
+            setGithubAccount(null)
           }
         }
       }
@@ -89,7 +109,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       linkSubscription.remove()
       subscription.unsubscribe()
     }
-  }, [setUser])
+  }, [setUser, setGithubAccount, loadGithubAccount])
 
   return <>{children}</>
 }

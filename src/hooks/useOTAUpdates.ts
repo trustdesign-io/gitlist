@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { Alert, AppState, AppStateStatus } from 'react-native'
+import { Alert, AppState } from 'react-native'
+import type { AppStateStatus } from 'react-native'
 import * as Updates from 'expo-updates'
 
 /**
