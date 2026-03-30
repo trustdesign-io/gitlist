@@ -6,15 +6,27 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TextInput as RNTextInput,
 } from 'react-native'
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import Ionicons from '@expo/vector-icons/Ionicons'
+import * as Haptics from 'expo-haptics'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, fontSize, spacing, borderRadius } from '@trustdesign/shared/tokens'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { useCurrentUser } from '../../../hooks/use-current-user'
 import { fetchGithubPAT } from '../../../lib/github-pat'
-import { fetchBoardItems, groupTasksByStatus, type BoardColumn, type Task } from '../../../lib/github'
+import {
+  fetchBoardItems,
+  groupTasksByStatus,
+  addDraftTask,
+  type BoardColumn,
+  type Task,
+} from '../../../lib/github'
 import { useTasksStore } from '../../../stores/tasks-store'
 import { getCached, setCached } from '../../../lib/cache'
 import { useBoardsStore } from '../../../stores/boards-store'
@@ -254,6 +266,142 @@ function sectionHeaderStyles(theme: ReturnType<typeof useTheme>['theme']) {
 }
 
 // ---------------------------------------------------------------------------
+// Quick-add bar
+// ---------------------------------------------------------------------------
+
+interface QuickAddBarProps {
+  onSubmit: (title: string) => Promise<void>
+  theme: ReturnType<typeof useTheme>['theme']
+  bottomInset: number
+}
+
+function QuickAddBar({ onSubmit, theme, bottomInset }: QuickAddBarProps) {
+  const [title, setTitle] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const s = useMemo(() => quickAddStyles(theme, bottomInset), [theme, bottomInset])
+
+  const showError = useCallback((msg: string) => {
+    setErrorMsg(msg)
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    errorTimerRef.current = setTimeout(() => setErrorMsg(null), 3000)
+  }, [])
+
+  const handleSubmit = useCallback(async () => {
+    const trimmed = title.trim()
+    if (!trimmed || isSubmitting) return
+
+    setIsSubmitting(true)
+    const submitted = trimmed
+    setTitle('')
+    Keyboard.dismiss()
+
+    try {
+      await onSubmit(submitted)
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    } catch {
+      showError('Failed to add task. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [title, isSubmitting, onSubmit, showError])
+
+  const canSubmit = title.trim().length > 0 && !isSubmitting
+
+  return (
+    <View style={s.wrapper}>
+      {errorMsg != null && (
+        <View style={s.errorBanner} accessibilityLiveRegion="polite">
+          <Text style={s.errorText}>{errorMsg}</Text>
+        </View>
+      )}
+      <View style={s.bar}>
+        <RNTextInput
+          style={s.input}
+          placeholder="Add a task…"
+          placeholderTextColor={theme.colors.mutedForeground}
+          value={title}
+          onChangeText={setTitle}
+          onSubmitEditing={handleSubmit}
+          returnKeyType="send"
+          blurOnSubmit={false}
+          editable={!isSubmitting}
+          accessibilityLabel="New task title"
+        />
+        <Pressable
+          style={[s.sendButton, !canSubmit && s.sendButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={!canSubmit}
+          accessibilityRole="button"
+          accessibilityLabel="Add task"
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color={colors.surface.background} size="small" />
+          ) : (
+            <Ionicons
+              name="arrow-up"
+              size={18}
+              color={canSubmit ? colors.surface.background : theme.colors.mutedForeground}
+            />
+          )}
+        </Pressable>
+      </View>
+    </View>
+  )
+}
+
+function quickAddStyles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number) {
+  return StyleSheet.create({
+    wrapper: {
+      backgroundColor: theme.colors.card,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+    },
+    bar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing[4],
+      paddingTop: spacing[3],
+      paddingBottom: spacing[3] + bottomInset,
+      gap: spacing[2],
+    },
+    input: {
+      flex: 1,
+      minHeight: 40,
+      backgroundColor: theme.colors.input,
+      borderRadius: borderRadius.xl,
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      color: theme.colors.foreground,
+    },
+    sendButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    sendButtonDisabled: {
+      backgroundColor: theme.colors.muted,
+    },
+    errorBanner: {
+      backgroundColor: theme.colors.error,
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+    },
+    errorText: {
+      color: colors.surface.background,
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 
@@ -263,14 +411,24 @@ export default function BoardScreen() {
   const user = useCurrentUser()
   const router = useRouter()
   const navigation = useNavigation()
+  const insets = useSafeAreaInsets()
 
-  const { tasksByBoard, isLoading, error, setTasks, setLoading, setError } = useTasksStore()
+  const {
+    tasksByBoard,
+    isLoading,
+    error,
+    setTasks,
+    setLoading,
+    setError,
+    prependTask,
+    removeTask,
+    replaceTask,
+  } = useTasksStore()
   const boards = useBoardsStore((state) => state.boards)
 
   const tasks = id ? (tasksByBoard[id] ?? null) : null
   const board = id ? boards.find((b) => b.id === id) : undefined
 
-  // Set the header title to the board name
   useEffect(() => {
     if (board?.title) {
       navigation.setOptions({ title: board.title })
@@ -280,7 +438,6 @@ export default function BoardScreen() {
   const loadTasks = useCallback(async () => {
     if (!id || !user?.id) return
 
-    // Serve cached data immediately so the screen renders without a spinner
     const cached = getCached<Task[]>(['tasks', user.id, id])
     if (cached) {
       setTasks(id, cached)
@@ -311,8 +468,6 @@ export default function BoardScreen() {
     }
   }, [id, user?.id, setTasks, setLoading, setError])
 
-  // Always fetch on mount — cached data is served immediately inside loadTasks,
-  // then fresh data from the API replaces it when the request completes.
   useEffect(() => {
     void loadTasks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -321,6 +476,46 @@ export default function BoardScreen() {
   const onRefresh = useCallback(() => {
     void loadTasks()
   }, [loadTasks])
+
+  const handleQuickAdd = useCallback(
+    async (title: string) => {
+      if (!id || !user?.id) return
+
+      // Optimistic update — temporary task visible immediately
+      const tempId = `temp-${Date.now()}`
+      const optimisticTask: Task = {
+        id: tempId,
+        title,
+        status: null,
+        statusOptionId: null,
+        assignees: [],
+        labels: [],
+        issueNumber: null,
+        issueState: null,
+        isDraft: true,
+      }
+      prependTask(id, optimisticTask)
+
+      const pat = await fetchGithubPAT(user.id)
+      if (!pat) {
+        removeTask(id, tempId)
+        throw new Error('Could not retrieve GitHub token.')
+      }
+
+      try {
+        const realTask = await addDraftTask(pat, id, title)
+        replaceTask(id, tempId, realTask)
+
+        // Sync updated task list to cache
+        const current = useTasksStore.getState().tasksByBoard[id] ?? []
+        setCached(['tasks', user.id, id], current)
+      } catch (err) {
+        removeTask(id, tempId)
+        throw err
+      }
+    },
+    [id, user?.id, prependTask, removeTask, replaceTask]
+  )
 
   const { theme: t } = useTheme()
   const s = useMemo(() => styles(t), [t])
@@ -335,7 +530,7 @@ export default function BoardScreen() {
     [columns]
   )
 
-  // Loading skeleton
+  // Loading skeleton — no quick-add during initial load
   if (isLoading && tasks === null) {
     return (
       <View style={s.container}>
@@ -346,7 +541,7 @@ export default function BoardScreen() {
     )
   }
 
-  // Error state
+  // Hard error with no cached data — no quick-add
   if (error && tasks === null) {
     return (
       <View style={[s.container, s.centered]}>
@@ -369,58 +564,69 @@ export default function BoardScreen() {
     )
   }
 
-  // Empty state
-  if (tasks !== null && tasks.length === 0) {
-    return (
-      <View style={[s.container, s.centered]}>
-        <Ionicons name="checkmark-circle-outline" size={48} color={theme.colors.mutedForeground} />
-        <Text style={s.emptyTitle}>No items yet</Text>
-        <Text style={s.emptyBody}>
-          Add issues or draft items to this board in GitHub and they'll appear here.
-        </Text>
-      </View>
-    )
-  }
-
+  // Empty state + task list — both include the quick-add bar
   return (
-    <SectionList
+    <KeyboardAvoidingView
       style={s.container}
-      contentContainerStyle={s.content}
-      sections={sections}
-      keyExtractor={(item) => item.id}
-      renderSectionHeader={({ section }) => (
-        <SectionHeader title={section.title} count={section.count} theme={theme} />
-      )}
-      renderItem={({ item }) => (
-        <View style={s.taskPadding}>
-          <TaskCard
-            task={item}
-            theme={theme}
-            onPress={() =>
-              router.push({
-                pathname: '/(app)/task/[id]',
-                params: { id: item.id, boardId: id },
-              })
-            }
-          />
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+    >
+      {tasks !== null && tasks.length === 0 ? (
+        <View style={[s.container, s.centered]}>
+          <Ionicons name="checkmark-circle-outline" size={48} color={theme.colors.mutedForeground} />
+          <Text style={s.emptyTitle}>No items yet</Text>
+          <Text style={s.emptyBody}>
+            Add your first task below or add issues to this board in GitHub.
+          </Text>
         </View>
-      )}
-      refreshControl={
-        <RefreshControl
-          refreshing={isLoading}
-          onRefresh={onRefresh}
-          tintColor={theme.colors.primary}
+      ) : (
+        <SectionList
+          style={s.container}
+          contentContainerStyle={s.content}
+          sections={sections}
+          keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          renderSectionHeader={({ section }) => (
+            <SectionHeader title={section.title} count={section.count} theme={theme} />
+          )}
+          renderItem={({ item }) => (
+            <View style={s.taskPadding}>
+              <TaskCard
+                task={item}
+                theme={theme}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(app)/task/[id]',
+                    params: { id: item.id, boardId: id },
+                  })
+                }
+              />
+            </View>
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={onRefresh}
+              tintColor={theme.colors.primary}
+            />
+          }
+          stickySectionHeadersEnabled
         />
-      }
-      stickySectionHeadersEnabled
-    />
+      )}
+
+      <QuickAddBar
+        onSubmit={handleQuickAdd}
+        theme={theme}
+        bottomInset={insets.bottom}
+      />
+    </KeyboardAvoidingView>
   )
 }
 
 function styles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.muted },
-    content: { paddingBottom: spacing[8] },
+    content: { paddingBottom: spacing[4] },
     taskPadding: { paddingHorizontal: spacing[5], paddingTop: spacing[2] },
     centered: {
       justifyContent: 'center',

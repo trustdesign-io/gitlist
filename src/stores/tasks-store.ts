@@ -10,6 +10,12 @@ interface TasksState {
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearBoard: (boardId: string) => void
+  /** Prepend a task to the top of a board's list (used for optimistic adds). */
+  prependTask: (boardId: string, task: Task) => void
+  /** Remove a task by ID from a board's list (used for optimistic rollback). */
+  removeTask: (boardId: string, taskId: string) => void
+  /** Replace a task by ID in a board's list (used to swap optimistic → real task). */
+  replaceTask: (boardId: string, oldId: string, newTask: Task) => void
 }
 
 export const useTasksStore = create<TasksState>((set) => ({
@@ -29,4 +35,25 @@ export const useTasksStore = create<TasksState>((set) => ({
       delete next[boardId]
       return { tasksByBoard: next }
     }),
+  prependTask: (boardId, task) =>
+    set((state) => ({
+      tasksByBoard: {
+        ...state.tasksByBoard,
+        [boardId]: [task, ...(state.tasksByBoard[boardId] ?? [])],
+      },
+    })),
+  removeTask: (boardId, taskId) =>
+    set((state) => ({
+      tasksByBoard: {
+        ...state.tasksByBoard,
+        [boardId]: (state.tasksByBoard[boardId] ?? []).filter((t) => t.id !== taskId),
+      },
+    })),
+  replaceTask: (boardId, oldId, newTask) =>
+    set((state) => ({
+      tasksByBoard: {
+        ...state.tasksByBoard,
+        [boardId]: (state.tasksByBoard[boardId] ?? []).map((t) => (t.id === oldId ? newTask : t)),
+      },
+    })),
 }))
