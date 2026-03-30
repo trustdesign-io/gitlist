@@ -9,10 +9,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
-  TextInput as RNTextInput,
+  TextInput,
   Modal,
   FlatList,
   Alert,
+  TouchableOpacity,
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
@@ -44,11 +45,19 @@ import { useFieldsStore } from '../../../stores/fields-store'
 import { getCached, setCached } from '../../../lib/cache'
 import { useBoardsStore } from '../../../stores/boards-store'
 import { setLastBoardId, setLastViewedAt } from '../../../lib/last-board'
+import {
+  getPersistedFilters,
+  setPersistedFilters,
+  type FilterKey,
+  type ActiveFilters,
+} from '../../../lib/task-filters'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Card } from '../../../components/ui/Card'
 
 const ALL_BOARDS_ID = 'all'
 const MAX_ITEMS_PER_BOARD = 50
+// Height of the search + filter header — used to scroll past it on initial render
+const SEARCH_HEADER_HEIGHT = 116
 
 // ---------------------------------------------------------------------------
 // Skeleton
@@ -431,6 +440,193 @@ function sectionHeaderStyles(theme: ReturnType<typeof useTheme>['theme']) {
 }
 
 // ---------------------------------------------------------------------------
+// Filter chip
+// ---------------------------------------------------------------------------
+
+interface FilterChipProps {
+  label: string
+  value: string | undefined
+  onPress: () => void
+  theme: ReturnType<typeof useTheme>['theme']
+}
+
+function FilterChip({ label, value, onPress, theme }: FilterChipProps) {
+  const s = useMemo(() => filterChipStyles(theme), [theme])
+  const active = value != null
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[s.chip, active && s.activeChip]}
+      accessibilityRole="button"
+      accessibilityLabel={active ? `${label}: ${value}` : `Filter by ${label}`}
+    >
+      <Text style={[s.label, active && s.activeLabel]} numberOfLines={1}>
+        {active ? value : label}
+      </Text>
+      <Ionicons
+        name={active ? 'close-circle' : 'chevron-down'}
+        size={13}
+        color={active ? theme.colors.primary : theme.colors.mutedForeground}
+      />
+    </Pressable>
+  )
+}
+
+function filterChipStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[1],
+      borderRadius: 99,
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    activeChip: {
+      backgroundColor: theme.colors.primary + '18',
+      borderColor: theme.colors.primary,
+    },
+    label: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+      maxWidth: 100,
+    },
+    activeLabel: {
+      color: theme.colors.primary,
+      fontWeight: '600',
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Search + filter header
+// ---------------------------------------------------------------------------
+
+interface SearchFilterHeaderProps {
+  searchQuery: string
+  onSearchChange: (q: string) => void
+  activeFilters: ActiveFilters
+  availableStatuses: string[]
+  availableAssignees: string[]
+  onFilterChipPress: (key: FilterKey) => void
+  onClearAll: () => void
+  theme: ReturnType<typeof useTheme>['theme']
+}
+
+function SearchFilterHeader({
+  searchQuery,
+  onSearchChange,
+  activeFilters,
+  availableStatuses,
+  availableAssignees,
+  onFilterChipPress,
+  onClearAll,
+  theme,
+}: SearchFilterHeaderProps) {
+  const s = useMemo(() => searchHeaderStyles(theme), [theme])
+  const hasActiveFilters = Object.values(activeFilters).some((v) => v != null)
+
+  return (
+    <View style={s.container}>
+      <View style={s.searchRow}>
+        <Ionicons name="search-outline" size={16} color={theme.colors.mutedForeground} style={s.searchIcon} />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search tasks..."
+          placeholderTextColor={theme.colors.mutedForeground}
+          value={searchQuery}
+          onChangeText={onSearchChange}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Search tasks"
+        />
+      </View>
+
+      <View style={s.filtersRow}>
+        {availableStatuses.length > 0 && (
+          <FilterChip
+            label="Status"
+            value={activeFilters.status}
+            onPress={() => onFilterChipPress('status')}
+            theme={theme}
+          />
+        )}
+        {availableAssignees.length > 0 && (
+          <FilterChip
+            label="Assignee"
+            value={activeFilters.assignee}
+            onPress={() => onFilterChipPress('assignee')}
+            theme={theme}
+          />
+        )}
+        {hasActiveFilters && (
+          <Pressable
+            onPress={onClearAll}
+            style={s.clearButton}
+            accessibilityRole="button"
+            accessibilityLabel="Clear all filters"
+          >
+            <Text style={s.clearLabel}>Clear all</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  )
+}
+
+function searchHeaderStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+      paddingHorizontal: spacing[5],
+      paddingTop: spacing[3],
+      paddingBottom: spacing[3],
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.colors.muted,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing[3],
+      height: 40,
+      marginBottom: spacing[2],
+    },
+    searchIcon: {
+      marginRight: spacing[2],
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: fontSize.sm.size,
+      color: theme.colors.foreground,
+      height: '100%',
+    },
+    filtersRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing[2],
+    },
+    clearButton: {
+      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[1],
+      justifyContent: 'center',
+    },
+    clearLabel: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Quick-add bar
 // ---------------------------------------------------------------------------
 
@@ -482,7 +678,7 @@ function QuickAddBar({ onSubmit, theme, bottomInset }: QuickAddBarProps) {
         </View>
       )}
       <View style={s.bar}>
-        <RNTextInput
+        <TextInput
           style={s.input}
           placeholder="Add a task..."
           placeholderTextColor={theme.colors.mutedForeground}
@@ -586,7 +782,7 @@ interface PickerBoardItem {
 function BoardPickerModal({ currentBoardId, onSelect, onClose, theme }: BoardPickerModalProps) {
   const boards = useBoardsStore((state) => state.boards)
   const insets = useSafeAreaInsets()
-  const s = useMemo(() => pickerStyles(theme), [theme])
+  const s = useMemo(() => boardPickerStyles(theme), [theme])
 
   const items: PickerBoardItem[] = [
     { id: ALL_BOARDS_ID, title: 'All boards', isAllBoards: true },
@@ -659,7 +855,7 @@ function BoardPickerModal({ currentBoardId, onSelect, onClose, theme }: BoardPic
   )
 }
 
-function pickerStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function boardPickerStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFillObject,
@@ -727,6 +923,210 @@ function pickerStyles(theme: ReturnType<typeof useTheme>['theme']) {
     boardNameSelected: {
       color: theme.colors.primary,
       fontWeight: '600',
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Filter picker modal
+// ---------------------------------------------------------------------------
+
+interface FilterPickerModalProps {
+  visible: boolean
+  title: string
+  options: string[]
+  selected: string | undefined
+  onSelect: (value: string) => void
+  onDismiss: () => void
+  theme: ReturnType<typeof useTheme>['theme']
+}
+
+function FilterPickerModal({
+  visible,
+  title,
+  options,
+  selected,
+  onSelect,
+  onDismiss,
+  theme,
+}: FilterPickerModalProps) {
+  const s = useMemo(() => filterPickerStyles(theme), [theme])
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onDismiss}
+      accessibilityViewIsModal
+    >
+      <Pressable style={s.backdrop} onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Close filter" />
+      <View style={s.sheet}>
+        <View style={s.handle} />
+        <Text style={s.title}>{title}</Text>
+        <FlatList
+          data={options}
+          keyExtractor={(item) => item}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={s.option}
+              onPress={() => onSelect(item)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: item === selected }}
+            >
+              <Text style={[s.optionLabel, item === selected && s.selectedLabel]}>
+                {item}
+              </Text>
+              {item === selected && (
+                <Ionicons name="checkmark" size={18} color={theme.colors.primary} />
+              )}
+            </TouchableOpacity>
+          )}
+          ItemSeparatorComponent={() => <View style={s.separator} />}
+        />
+        <Pressable
+          style={s.cancelButton}
+          onPress={onDismiss}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+        >
+          <Text style={s.cancelLabel}>Cancel</Text>
+        </Pressable>
+      </View>
+    </Modal>
+  )
+}
+
+function filterPickerStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    sheet: {
+      backgroundColor: theme.colors.background,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingBottom: spacing[8],
+      maxHeight: '60%',
+    },
+    handle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.colors.border,
+      alignSelf: 'center',
+      marginTop: spacing[3],
+      marginBottom: spacing[2],
+    },
+    title: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      fontWeight: '700',
+      color: theme.colors.foreground,
+      textAlign: 'center',
+      paddingBottom: spacing[3],
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    option: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing[5],
+      paddingVertical: spacing[4],
+    },
+    optionLabel: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      color: theme.colors.foreground,
+    },
+    selectedLabel: {
+      color: theme.colors.primary,
+      fontWeight: '600',
+    },
+    separator: {
+      height: 1,
+      backgroundColor: theme.colors.border,
+      marginHorizontal: spacing[5],
+    },
+    cancelButton: {
+      marginHorizontal: spacing[5],
+      marginTop: spacing[3],
+      paddingVertical: spacing[3],
+      alignItems: 'center',
+      backgroundColor: theme.colors.muted,
+      borderRadius: borderRadius.lg,
+    },
+    cancelLabel: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Filter badge (nav header right button)
+// ---------------------------------------------------------------------------
+
+interface FilterBadgeButtonProps {
+  activeCount: number
+  onPress: () => void
+  theme: ReturnType<typeof useTheme>['theme']
+}
+
+function FilterBadgeButton({ activeCount, onPress, theme }: FilterBadgeButtonProps) {
+  const s = useMemo(() => filterBadgeStyles(theme), [theme])
+  return (
+    <Pressable
+      onPress={onPress}
+      style={s.container}
+      accessibilityRole="button"
+      accessibilityLabel={
+        activeCount > 0 ? `Filters: ${activeCount} active` : 'Filter tasks'
+      }
+      hitSlop={8}
+    >
+      <Ionicons
+        name="options-outline"
+        size={22}
+        color={activeCount > 0 ? theme.colors.primary : theme.colors.foreground}
+      />
+      {activeCount > 0 && (
+        <View style={s.badge}>
+          <Text style={s.badgeLabel}>{activeCount}</Text>
+        </View>
+      )}
+    </Pressable>
+  )
+}
+
+function filterBadgeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    container: {
+      width: 36,
+      height: 36,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    badge: {
+      position: 'absolute',
+      top: 2,
+      right: 2,
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: theme.colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 3,
+    },
+    badgeLabel: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.surface.background,
+      lineHeight: 12,
     },
   })
 }
@@ -848,6 +1248,15 @@ export default function BoardScreen() {
   const [undoToastLabel, setUndoToastLabel] = useState('')
   const pendingUndo = useRef<PendingUndo | null>(null)
 
+  // Search + filter state — restored from MMKV on mount
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>(() =>
+    id && id !== ALL_BOARDS_ID ? getPersistedFilters(id) : {}
+  )
+  const [filterPickerKey, setFilterPickerKey] = useState<FilterKey | null>(null)
+
+  const sectionListRef = useRef<SectionList<Task>>(null)
+
   const {
     tasksByBoard,
     isLoading,
@@ -873,9 +1282,13 @@ export default function BoardScreen() {
     setLastViewedAt(user.id, id)
   }, [id, user?.id, isAllBoards])
 
-  // Set tappable header title
+  // Set tappable header title + filter badge button
   useEffect(() => {
     const title = isAllBoards ? 'All Boards' : (board?.title ?? 'Board')
+    const activeCount =
+      (activeFilters.status != null ? 1 : 0) +
+      (activeFilters.assignee != null ? 1 : 0) +
+      (searchQuery.length > 0 ? 1 : 0)
     navigation.setOptions({
       headerTitle: () => (
         <Pressable
@@ -890,8 +1303,19 @@ export default function BoardScreen() {
           <Ionicons name="chevron-down" size={14} color={theme.colors.mutedForeground} />
         </Pressable>
       ),
+      headerRight: !isAllBoards
+        ? () => (
+            <FilterBadgeButton
+              activeCount={activeCount}
+              onPress={() => {
+                sectionListRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: true })
+              }}
+              theme={theme}
+            />
+          )
+        : undefined,
     })
-  }, [board?.title, isAllBoards, navigation, theme])
+  }, [board?.title, isAllBoards, navigation, theme, activeFilters, searchQuery])
 
   const loadTasks = useCallback(async () => {
     if (!id || !user?.id || isAllBoards) return
@@ -990,6 +1414,21 @@ export default function BoardScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user?.id])
+
+  // After tasks load, scroll past the search header to hide it initially
+  const tasks = isAllBoards ? null : (id ? (tasksByBoard[id] ?? null) : null)
+  useEffect(() => {
+    if (tasks && tasks.length > 0) {
+      const timer = setTimeout(() => {
+        sectionListRef.current?.getScrollResponder()?.scrollTo({
+          y: SEARCH_HEADER_HEIGHT,
+          animated: false,
+        })
+      }, 80)
+      return () => clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks?.length === 0 ? null : id])
 
   // Commit any pending undo actions when leaving the screen
   useEffect(() => {
@@ -1205,19 +1644,96 @@ export default function BoardScreen() {
     hideUndoToast()
   }, [insertTask, hideUndoToast])
 
+  // Persist filter changes to MMKV
+  const updateFilters = useCallback(
+    (next: ActiveFilters) => {
+      setActiveFilters(next)
+      if (id) setPersistedFilters(id, next)
+    },
+    [id]
+  )
+
+  const handleFilterChipPress = useCallback(
+    (key: FilterKey) => {
+      if (activeFilters[key] != null) {
+        const next = { ...activeFilters }
+        delete next[key]
+        updateFilters(next)
+      } else {
+        setFilterPickerKey(key)
+      }
+    },
+    [activeFilters, updateFilters]
+  )
+
+  const handleFilterSelect = useCallback(
+    (value: string) => {
+      if (!filterPickerKey) return
+      updateFilters({ ...activeFilters, [filterPickerKey]: value })
+      setFilterPickerKey(null)
+    },
+    [filterPickerKey, activeFilters, updateFilters]
+  )
+
+  const handleClearAll = useCallback(() => {
+    setSearchQuery('')
+    updateFilters({})
+  }, [updateFilters])
+
   const { theme: t } = useTheme()
   const s = useMemo(() => styles(t), [t])
 
-  const tasks = isAllBoards ? null : (id ? (tasksByBoard[id] ?? null) : null)
+  // Derived: unique statuses and assignees from all tasks
+  const availableStatuses = useMemo(() => {
+    if (!tasks) return []
+    const seen = new Set<string>()
+    for (const task of tasks) {
+      if (task.status != null) seen.add(task.status)
+    }
+    return [...seen]
+  }, [tasks])
 
-  const columns: BoardColumn[] = useMemo(
-    () => (tasks ? groupTasksByStatus(tasks) : []),
-    [tasks]
-  )
+  const availableAssignees = useMemo(() => {
+    if (!tasks) return []
+    const seen = new Set<string>()
+    for (const task of tasks) {
+      for (const a of task.assignees) seen.add(a.login)
+    }
+    return [...seen]
+  }, [tasks])
+
+  // Apply search + filters to produce the visible task list
+  const filteredColumns: BoardColumn[] = useMemo(() => {
+    if (!tasks) return []
+
+    const q = searchQuery.toLowerCase().trim()
+    const statusFilter = activeFilters.status
+    const assigneeFilter = activeFilters.assignee
+
+    let filtered = tasks
+    if (q) {
+      filtered = filtered.filter((task) => task.title.toLowerCase().includes(q))
+    }
+    if (statusFilter != null) {
+      filtered = filtered.filter((task) => task.status === statusFilter)
+    }
+    if (assigneeFilter != null) {
+      filtered = filtered.filter((task) =>
+        task.assignees.some((a) => a.login === assigneeFilter)
+      )
+    }
+
+    return groupTasksByStatus(filtered)
+  }, [tasks, searchQuery, activeFilters])
 
   const sections = useMemo(
-    () => columns.map((col) => ({ title: col.name, data: col.tasks, count: col.tasks.length })),
-    [columns]
+    () =>
+      filteredColumns.map((col) => ({
+        title: col.name,
+        data: col.tasks,
+        count: col.tasks.length,
+      })),
+    [filteredColumns]
   )
 
   const allBoardsSections = useMemo(() => {
@@ -1229,6 +1745,12 @@ export default function BoardScreen() {
       })
       .filter((sec) => sec.data.length > 0)
   }, [isAllBoards, boards, tasksByBoard])
+
+  const isFiltering = searchQuery.length > 0 || Object.values(activeFilters).some((v) => v != null)
+  const pickerOptions =
+    filterPickerKey === 'status' ? availableStatuses : availableAssignees
+  const pickerTitle =
+    filterPickerKey === 'status' ? 'Filter by Status' : 'Filter by Assignee'
 
   // ---- All Boards view ----
   if (isAllBoards) {
@@ -1347,6 +1869,19 @@ export default function BoardScreen() {
     )
   }
 
+  const searchFilterHeader = (
+    <SearchFilterHeader
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      activeFilters={activeFilters}
+      availableStatuses={availableStatuses}
+      availableAssignees={availableAssignees}
+      onFilterChipPress={handleFilterChipPress}
+      onClearAll={handleClearAll}
+      theme={theme}
+    />
+  )
+
   return (
     <>
       <KeyboardAvoidingView
@@ -1364,11 +1899,13 @@ export default function BoardScreen() {
           </View>
         ) : (
           <SectionList
+            ref={sectionListRef}
             style={s.list}
             contentContainerStyle={s.content}
             sections={sections}
             keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={searchFilterHeader}
             renderSectionHeader={({ section }) => (
               <SectionHeader title={section.title} count={section.count} theme={theme} />
             )}
@@ -1388,6 +1925,22 @@ export default function BoardScreen() {
                 onDelete={handleDelete}
               />
             )}
+            ListEmptyComponent={
+              isFiltering ? (
+                <View style={s.filterEmpty}>
+                  <Ionicons name="search-outline" size={40} color={theme.colors.mutedForeground} />
+                  <Text style={s.emptyTitle}>No matching tasks</Text>
+                  <Pressable
+                    onPress={handleClearAll}
+                    style={s.clearFiltersButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear search and filters"
+                  >
+                    <Text style={s.clearFiltersLabel}>Clear search &amp; filters</Text>
+                  </Pressable>
+                </View>
+              ) : null
+            }
             refreshControl={
               <RefreshControl
                 refreshing={isLoading}
@@ -1409,6 +1962,15 @@ export default function BoardScreen() {
         visible={undoToastVisible}
         label={undoToastLabel}
         onUndo={handleUndo}
+        theme={theme}
+      />
+      <FilterPickerModal
+        visible={filterPickerKey != null}
+        title={pickerTitle}
+        options={pickerOptions}
+        selected={filterPickerKey ? activeFilters[filterPickerKey] : undefined}
+        onSelect={handleFilterSelect}
+        onDismiss={() => setFilterPickerKey(null)}
         theme={theme}
       />
       {pickerVisible && (
@@ -1449,6 +2011,11 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
       alignItems: 'center',
       padding: spacing[8],
     },
+    filterEmpty: {
+      alignItems: 'center',
+      padding: spacing[8],
+      gap: spacing[3],
+    },
     emptyTitle: {
       marginTop: spacing[4],
       fontSize: fontSize.lg.size,
@@ -1462,6 +2029,17 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
       lineHeight: fontSize.sm.lineHeight,
       color: theme.colors.mutedForeground,
       textAlign: 'center',
+    },
+    clearFiltersButton: {
+      marginTop: spacing[2],
+      paddingVertical: spacing[2],
+      paddingHorizontal: spacing[4],
+    },
+    clearFiltersLabel: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.primary,
+      fontWeight: '600',
     },
     errorTitle: {
       marginTop: spacing[4],
