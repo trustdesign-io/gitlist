@@ -16,6 +16,10 @@ interface TasksState {
   removeTask: (boardId: string, taskId: string) => void
   /** Replace a task by ID in a board's list (used to swap optimistic → real task). */
   replaceTask: (boardId: string, oldId: string, newTask: Task) => void
+  /** Partially update a task by ID in a board's list. */
+  updateTask: (boardId: string, taskId: string, updates: Partial<Task>) => void
+  /** Insert a task at the top of a board's list (used for undo restore). */
+  insertTask: (boardId: string, task: Task) => void
 }
 
 export const useTasksStore = create<TasksState>((set) => ({
@@ -54,6 +58,22 @@ export const useTasksStore = create<TasksState>((set) => ({
       tasksByBoard: {
         ...state.tasksByBoard,
         [boardId]: (state.tasksByBoard[boardId] ?? []).map((t) => (t.id === oldId ? newTask : t)),
+      },
+    })),
+  updateTask: (boardId, taskId, updates) =>
+    set((state) => ({
+      tasksByBoard: {
+        ...state.tasksByBoard,
+        [boardId]: (state.tasksByBoard[boardId] ?? []).map((t) =>
+          t.id === taskId ? { ...t, ...updates } : t
+        ),
+      },
+    })),
+  insertTask: (boardId, task) =>
+    set((state) => ({
+      tasksByBoard: {
+        ...state.tasksByBoard,
+        [boardId]: [task, ...(state.tasksByBoard[boardId] ?? [])],
       },
     })),
 }))
