@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, Dimensions, FlatList } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '../../stores/auth-store'
-import { sentryTrackOnboardingComplete } from '../../lib/sentry'
 import { useTheme } from '../../contexts/ThemeContext'
 
 const { width } = Dimensions.get('window')
@@ -17,22 +16,22 @@ interface OnboardingStep {
 const STEPS: OnboardingStep[] = [
   {
     id: '1',
-    title: 'Welcome',
-    description: 'Thanks for joining! Let us show you around.',
+    title: 'Welcome to Gitlist',
+    description: 'Track issues and pull requests across all your GitHub repos in one place.',
     emoji: '👋',
   },
   {
     id: '2',
-    title: 'Stay connected',
+    title: 'Connect GitHub',
     description:
-      'Get notified about things that matter to you. You can customise this later in settings.',
-    emoji: '🔔',
+      'Link your GitHub account to start pulling in your repositories and open items.',
+    emoji: '🔗',
   },
   {
     id: '3',
-    title: "You're all set",
-    description: 'Start exploring and make this app your own.',
-    emoji: '🚀',
+    title: 'Stay on top',
+    description: 'Get notified about new issues, reviews, and mentions as they happen.',
+    emoji: '🔔',
   },
 ]
 
@@ -49,7 +48,6 @@ export default function OnboardingScreen() {
     } else {
       if (user) {
         setUser({ ...user, onboardingCompletedAt: new Date() })
-        sentryTrackOnboardingComplete()
       }
       router.replace('/(app)/(tabs)')
     }
@@ -58,7 +56,6 @@ export default function OnboardingScreen() {
   function handleSkip() {
     if (user) {
       setUser({ ...user, onboardingCompletedAt: new Date() })
-      sentryTrackOnboardingComplete()
     }
     router.replace('/(app)/(tabs)')
   }

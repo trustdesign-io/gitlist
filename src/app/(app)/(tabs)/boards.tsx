@@ -2,14 +2,14 @@ import { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { useTheme } from '../../../contexts/ThemeContext'
 
-export default function ExploreScreen() {
+export default function BoardsScreen() {
   const { theme } = useTheme()
   const s = useMemo(() => styles(theme), [theme])
 
   return (
     <View style={s.container}>
-      <Text style={s.title}>Explore</Text>
-      <Text style={s.body}>Replace this with your app's explore/discover content.</Text>
+      <Text style={s.title}>Boards</Text>
+      <Text style={s.body}>Your GitHub repo boards will appear here.</Text>
     </View>
   )
 }
