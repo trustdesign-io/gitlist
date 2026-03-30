@@ -3,6 +3,101 @@ const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql'
 
 const REQUIRED_SCOPES = ['project', 'read:org']
 
+export interface Board {
+  id: string
+  title: string
+  shortDescription: string | null
+  updatedAt: string
+  itemCount: number
+  url: string
+}
+
+interface ProjectV2Node {
+  id: string
+  title: string
+  shortDescription: string | null
+  updatedAt: string
+  items: { totalCount: number }
+  url: string
+}
+
+interface FetchBoardsResponse {
+  viewer: {
+    projectsV2: { nodes: ProjectV2Node[] }
+    organizations: {
+      nodes: { projectsV2: { nodes: ProjectV2Node[] } }[]
+    }
+  }
+}
+
+const FETCH_BOARDS_QUERY = `
+  query FetchBoards {
+    viewer {
+      projectsV2(first: 20) {
+        nodes {
+          id
+          title
+          shortDescription
+          updatedAt
+          items { totalCount }
+          url
+        }
+      }
+      organizations(first: 10) {
+        nodes {
+          projectsV2(first: 20) {
+            nodes {
+              id
+              title
+              shortDescription
+              updatedAt
+              items { totalCount }
+              url
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
+function mapNode(node: ProjectV2Node): Board {
+  return {
+    id: node.id,
+    title: node.title,
+    shortDescription: node.shortDescription,
+    updatedAt: node.updatedAt,
+    itemCount: node.items.totalCount,
+    url: node.url,
+  }
+}
+
+/**
+ * Fetch all ProjectV2 boards the authenticated user has access to,
+ * including boards from their organisations.
+ */
+export async function fetchUserBoards(pat: string): Promise<Board[]> {
+  const data = await githubGraphQL<FetchBoardsResponse>(pat, FETCH_BOARDS_QUERY)
+
+  const userBoards = data.viewer.projectsV2.nodes.map(mapNode)
+
+  const orgBoards = data.viewer.organizations.nodes.flatMap((org) =>
+    org.projectsV2.nodes.map(mapNode)
+  )
+
+  // De-duplicate by id (a board may appear in both viewer and org results)
+  const seen = new Set<string>()
+  const all: Board[] = []
+  for (const board of [...userBoards, ...orgBoards]) {
+    if (!seen.has(board.id)) {
+      seen.add(board.id)
+      all.push(board)
+    }
+  }
+
+  return all.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+}
+
 interface ValidatePATResult {
   valid: boolean
   username?: string
