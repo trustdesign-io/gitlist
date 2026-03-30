@@ -49,3 +49,4 @@ yarn-error.*
 *-service-account-key.json
 service-account-key.json
 google-services.json
+!.npmrc
