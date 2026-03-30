@@ -1,6 +1,8 @@
 import { View, Text, StyleSheet, Switch, Pressable, Alert, Linking } from 'react-native'
 import { useState, useMemo } from 'react'
+import { useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
+import { useGithubStore } from '../../../stores/github-store'
 import { useTheme } from '../../../contexts/ThemeContext'
 import type { ColorScheme } from '../../../lib/theme'
 
@@ -15,6 +17,8 @@ const SCHEME_OPTIONS: ColorScheme[] = ['system', 'light', 'dark']
 export default function SettingsScreen() {
   const { theme, colorScheme, setColorScheme } = useTheme()
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
+  const { githubUsername, isPatLinked } = useGithubStore()
+  const router = useRouter()
 
   const s = useMemo(() => styles(theme), [theme])
 
@@ -44,6 +48,23 @@ export default function SettingsScreen() {
 
   return (
     <View style={s.container}>
+      <Text style={s.sectionHeader}>GitHub</Text>
+      <View style={s.section}>
+        <Pressable
+          style={s.row}
+          onPress={() => router.push('/(app)/link-github')}
+          accessibilityRole="button"
+          accessibilityLabel={isPatLinked ? 'Manage GitHub connection' : 'Link GitHub account'}
+        >
+          <Text style={s.rowLabel}>
+            {isPatLinked ? 'GitHub connected' : 'Link GitHub'}
+          </Text>
+          <Text style={isPatLinked ? s.rowValueGreen : s.rowValue}>
+            {isPatLinked ? `@${githubUsername}` : 'Not linked ›'}
+          </Text>
+        </Pressable>
+      </View>
+
       <Text style={s.sectionHeader}>Preferences</Text>
       <View style={s.section}>
         <View style={s.row}>
@@ -139,6 +160,10 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
     rowValue: {
       fontSize: 16,
       color: theme.colors.mutedForeground,
+    },
+    rowValueGreen: {
+      fontSize: 16,
+      color: theme.colors.success,
     },
     chevron: {
       fontSize: 20,

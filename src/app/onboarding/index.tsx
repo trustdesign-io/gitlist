@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, Dimensions, FlatList } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '../../stores/auth-store'
-import { sentryTrackOnboardingComplete } from '../../lib/sentry'
 import { useTheme } from '../../contexts/ThemeContext'
 
 const { width } = Dimensions.get('window')
@@ -49,7 +48,6 @@ export default function OnboardingScreen() {
     } else {
       if (user) {
         setUser({ ...user, onboardingCompletedAt: new Date() })
-        sentryTrackOnboardingComplete()
       }
       router.replace('/(app)/(tabs)')
     }
@@ -58,7 +56,6 @@ export default function OnboardingScreen() {
   function handleSkip() {
     if (user) {
       setUser({ ...user, onboardingCompletedAt: new Date() })
-      sentryTrackOnboardingComplete()
     }
     router.replace('/(app)/(tabs)')
   }

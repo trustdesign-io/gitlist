@@ -6,6 +6,7 @@ import { AuthProvider } from '../components/AuthProvider'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { EnvironmentBadge } from '../components/EnvironmentBadge'
 import { useAuthStore } from '../stores/auth-store'
+import { useGithubStore } from '../stores/github-store'
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext'
 import { useOTAUpdates } from '../hooks/useOTAUpdates'
 import { initSentry, Sentry } from '../lib/sentry'
@@ -15,36 +16,47 @@ SplashScreen.preventAutoHideAsync()
 initSentry()
 
 function RootLayoutNav() {
-  const { user, isLoading } = useAuthStore()
+  const { user, isLoading: authLoading } = useAuthStore()
+  const { isPatLinked, isLoading: githubLoading } = useGithubStore()
   const segments = useSegments()
   const router = useRouter()
   useOTAUpdates()
 
   useEffect(() => {
-    if (isLoading) return
+    // Wait for both auth and GitHub state to resolve
+    if (authLoading || githubLoading) return
 
     const inAuthGroup = segments[0] === '(auth)'
     const inOnboarding = segments[0] === 'onboarding'
+    const inLinkGithub =
+      segments[0] === '(app)' && segments.includes('link-github')
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/sign-in')
     } else if (user && inAuthGroup) {
-      // Check if onboarding is needed
       if (!user.onboardingCompletedAt) {
         router.replace('/onboarding')
+      } else if (!isPatLinked) {
+        router.replace('/(app)/link-github')
       } else {
         router.replace('/(app)/(tabs)')
       }
     } else if (user && inOnboarding && user.onboardingCompletedAt) {
-      router.replace('/(app)/(tabs)')
+      if (!isPatLinked) {
+        router.replace('/(app)/link-github')
+      } else {
+        router.replace('/(app)/(tabs)')
+      }
+    } else if (user && user.onboardingCompletedAt && !isPatLinked && !inLinkGithub) {
+      router.replace('/(app)/link-github')
     }
-  }, [user, isLoading, segments, router])
+  }, [user, authLoading, isPatLinked, githubLoading, segments, router])
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!authLoading) {
       SplashScreen.hideAsync()
     }
-  }, [isLoading])
+  }, [authLoading])
 
   const { theme } = useTheme()
 
