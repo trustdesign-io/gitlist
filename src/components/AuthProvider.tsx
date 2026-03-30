@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { Linking } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { handleAuthDeepLink } from '../lib/deep-links'
-import { loadGithubPAT } from '../lib/github-pat'
+import { loadGithubAccountMeta } from '../lib/github-pat'
 import { useAuthStore } from '../stores/auth-store'
 import { useGithubStore } from '../stores/github-store'
 import { sentryIdentifyUser, sentryClearUser } from '../lib/sentry'
@@ -19,7 +19,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loadGithubAccount = useCallback(
     async (userId: string) => {
       try {
-        const account = await loadGithubPAT(userId)
+        const account = await loadGithubAccountMeta(userId)
         setGithubAccount(account?.githubUsername ?? null)
       } catch {
         setGithubAccount(null)

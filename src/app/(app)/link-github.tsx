@@ -79,7 +79,11 @@ export default function LinkGithubScreen() {
           text: 'Unlink',
           style: 'destructive',
           onPress: async () => {
-            await removeGithubPAT(user.id)
+            const result = await removeGithubPAT(user.id)
+            if (!result.success) {
+              Alert.alert('Error', result.error ?? 'Failed to unlink account.')
+              return
+            }
             setGithubAccount(null)
           },
         },

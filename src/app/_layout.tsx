@@ -28,8 +28,8 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === '(auth)'
     const inOnboarding = segments[0] === 'onboarding'
-    const inLinkGithub =
-      segments[0] === '(app)' && segments.includes('link-github')
+    const segs = segments as string[]
+    const inLinkGithub = segs[0] === '(app)' && segs[1] === 'link-github'
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/sign-in')
