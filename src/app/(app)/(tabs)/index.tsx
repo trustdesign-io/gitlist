@@ -18,6 +18,7 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { useBoardsStore } from '../../../stores/boards-store'
 import { fetchUserBoards, type Board } from '../../../lib/github'
 import { fetchGithubPAT } from '../../../lib/github-pat'
+import { getCached, setCached } from '../../../lib/cache'
 
 function formatUpdatedAt(iso: string): string {
   const date = new Date(iso)
@@ -111,6 +112,13 @@ export default function BoardsScreen() {
 
   const loadBoards = useCallback(async () => {
     if (!user?.id) return
+
+    // Serve cached data immediately so the screen renders without a spinner
+    const cached = getCached<Board[]>(['boards', user.id])
+    if (cached) {
+      setBoards(cached)
+    }
+
     setLoading(true)
     setError(null)
     try {
@@ -120,6 +128,7 @@ export default function BoardsScreen() {
         return
       }
       const result = await fetchUserBoards(pat)
+      setCached(['boards', user.id], result)
       setBoards(result)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'

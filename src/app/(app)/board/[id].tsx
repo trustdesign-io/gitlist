@@ -16,6 +16,7 @@ import { useCurrentUser } from '../../../hooks/use-current-user'
 import { fetchGithubPAT } from '../../../lib/github-pat'
 import { fetchBoardItems, groupTasksByStatus, type BoardColumn, type Task } from '../../../lib/github'
 import { useTasksStore } from '../../../stores/tasks-store'
+import { getCached, setCached } from '../../../lib/cache'
 import { useBoardsStore } from '../../../stores/boards-store'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Card } from '../../../components/ui/Card'
@@ -278,6 +279,13 @@ export default function BoardScreen() {
 
   const loadTasks = useCallback(async () => {
     if (!id || !user?.id) return
+
+    // Serve cached data immediately so the screen renders without a spinner
+    const cached = getCached<Task[]>(['tasks', user.id, id])
+    if (cached) {
+      setTasks(id, cached)
+    }
+
     setLoading(true)
     setError(null)
     try {
@@ -287,6 +295,7 @@ export default function BoardScreen() {
         return
       }
       const result = await fetchBoardItems(pat, id)
+      setCached(['tasks', user.id, id], result)
       setTasks(id, result)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -302,11 +311,12 @@ export default function BoardScreen() {
     }
   }, [id, user?.id, setTasks, setLoading, setError])
 
+  // Always fetch on mount — cached data is served immediately inside loadTasks,
+  // then fresh data from the API replaces it when the request completes.
   useEffect(() => {
-    if (tasks === null) {
-      void loadTasks()
-    }
-  }, [tasks, loadTasks])
+    void loadTasks()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, user?.id])
 
   const onRefresh = useCallback(() => {
     void loadTasks()

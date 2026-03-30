@@ -14,6 +14,7 @@ import { useAuthStore } from '../../stores/auth-store'
 import { useGithubStore } from '../../stores/github-store'
 import { validatePAT } from '../../lib/github'
 import { saveGithubPAT, removeGithubPAT } from '../../lib/github-pat'
+import { clearUserCache } from '../../lib/cache'
 import { useTheme } from '../../contexts/ThemeContext'
 
 export default function LinkGithubScreen() {
@@ -84,6 +85,7 @@ export default function LinkGithubScreen() {
               Alert.alert('Error', result.error ?? 'Failed to unlink account.')
               return
             }
+            clearUserCache(user.id)
             setGithubAccount(null)
           },
         },
