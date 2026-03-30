@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useCallback, useEffect, useMemo } from 'react'
+import { useRouter } from 'expo-router'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { useCurrentUser } from '../../../hooks/use-current-user'
 import { Card } from '../../../components/ui/Card'
@@ -33,28 +34,35 @@ function formatUpdatedAt(iso: string): string {
 interface BoardCardProps {
   board: Board
   theme: ReturnType<typeof useTheme>['theme']
+  onPress: () => void
 }
 
-function BoardCard({ board, theme }: BoardCardProps) {
+function BoardCard({ board, theme, onPress }: BoardCardProps) {
   const s = useMemo(() => cardStyles(theme), [theme])
   return (
-    <Card style={s.card}>
-      <View style={s.header}>
-        <Text style={s.title} numberOfLines={2}>
-          {board.title}
-        </Text>
-        <Badge
-          label={`${board.itemCount} item${board.itemCount !== 1 ? 's' : ''}`}
-          variant="secondary"
-        />
-      </View>
-      {board.shortDescription ? (
-        <Text style={s.description} numberOfLines={2}>
-          {board.shortDescription}
-        </Text>
-      ) : null}
-      <Text style={s.updatedAt}>Updated {formatUpdatedAt(board.updatedAt)}</Text>
-    </Card>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open board ${board.title}`}
+    >
+      <Card style={s.card}>
+        <View style={s.header}>
+          <Text style={s.title} numberOfLines={2}>
+            {board.title}
+          </Text>
+          <Badge
+            label={`${board.itemCount} item${board.itemCount !== 1 ? 's' : ''}`}
+            variant="secondary"
+          />
+        </View>
+        {board.shortDescription ? (
+          <Text style={s.description} numberOfLines={2}>
+            {board.shortDescription}
+          </Text>
+        ) : null}
+        <Text style={s.updatedAt}>Updated {formatUpdatedAt(board.updatedAt)}</Text>
+      </Card>
+    </Pressable>
   )
 }
 
@@ -97,6 +105,7 @@ function skeletonStyles(theme: ReturnType<typeof useTheme>['theme']) {
 export default function BoardsScreen() {
   const user = useCurrentUser()
   const { theme } = useTheme()
+  const router = useRouter()
   const { boards, isLoading, error, setBoards, setLoading, setError } = useBoardsStore()
   const s = useMemo(() => styles(theme), [theme])
 
@@ -175,7 +184,13 @@ export default function BoardsScreen() {
       contentContainerStyle={boards.length === 0 ? s.emptyContainer : s.content}
       data={boards}
       keyExtractor={(item) => item.id}
-      renderItem={({ item }) => <BoardCard board={item} theme={theme} />}
+      renderItem={({ item }) => (
+          <BoardCard
+            board={item}
+            theme={theme}
+            onPress={() => router.push(`/(app)/board/${item.id}`)}
+          />
+        )}
       refreshControl={
         <RefreshControl
           refreshing={isLoading}

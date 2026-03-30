@@ -16,6 +16,10 @@ export default function AppLayout() {
         name="settings"
         options={{ headerShown: true, title: 'Settings', presentation: 'card' }}
       />
+      <Stack.Screen
+        name="board"
+        options={{ headerShown: true, presentation: 'card' }}
+      />
     </Stack>
   )
 }
