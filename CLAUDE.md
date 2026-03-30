@@ -1,22 +1,33 @@
-# starter-native
+# Gitlist
 
-React Native (Expo) starter template for trustdesign projects.
-
-> **Naming convention:** All starter repos use `starter-{platform}` format.
+A native to-do list app backed by GitHub Project boards (Projects v2 GraphQL API).
 
 ## Tech stack
 
 - **Framework**: Expo SDK 55 + React Native 0.83
 - **Navigation**: Expo Router (file-based, tab bar + stack)
 - **Language**: TypeScript (strict, typed routes)
-- **Auth**: Supabase via @supabase/supabase-js + AsyncStorage
+- **Auth**: Supabase via @supabase/supabase-js + AsyncStorage (user accounts & billing)
+- **GitHub integration**: GitHub Projects v2 GraphQL API, PAT-based auth (v1)
 - **State**: Zustand
+- **Local cache**: MMKV for offline task data
 - **Validation**: Zod (via @trustdesign/shared)
 - **Shared code**: @trustdesign/shared (types, schemas, tokens, Supabase client factory)
 - **Notifications**: expo-notifications
 - **OTA Updates**: expo-updates
-- **Deep linking**: URL scheme `starter-native://`
+- **Deep linking**: URL scheme `gitlist://`
 - **Error monitoring**: @sentry/react-native (optional — disabled when `EXPO_PUBLIC_SENTRY_DSN` is unset)
+
+## Architecture
+
+```
+Phone → Local cache (MMKV) → Sync engine → GitHub GraphQL API
+                                         → Supabase (user/billing only)
+```
+
+- **GitHub owns task data** — boards, columns, items, labels, assignees
+- **Supabase owns user data** — accounts, PAT storage, billing/subscriptions
+- Multi-board support from v1
 
 ## Project structure
 
@@ -29,17 +40,17 @@ app/                    # Expo Router file-based routes
 │   └── callback.tsx    # Supabase auth callback (email confirm / OAuth)
 ├── (app)/              # Authenticated screens
 │   ├── (tabs)/         # Bottom tab navigation
-│   │   ├── index.tsx   # Home tab
-│   │   ├── explore.tsx # Explore tab
+│   │   ├── index.tsx   # Boards list
 │   │   └── account.tsx # Account tab
-│   ├── profile/        # Profile editing (stack push)
-│   └── settings/       # App settings (stack push)
-└── onboarding/         # First-run onboarding flow
+│   ├── board/          # Board detail → task list
+│   ├── task/           # Task detail view
+│   └── settings/       # App settings, PAT management
+└── onboarding/         # First-run: sign up → link GitHub PAT
 src/
 ├── components/         # Reusable components (AuthProvider, ErrorBoundary)
 ├── hooks/              # Custom hooks (useCurrentUser)
-├── lib/                # Supabase client, auth functions, notifications
-├── stores/             # Zustand stores (auth-store)
+├── lib/                # Supabase client, GitHub GraphQL client, auth, notifications
+├── stores/             # Zustand stores (auth-store, boards-store, tasks-store)
 └── types/              # Type re-exports from shared package
 ```
 
@@ -47,8 +58,14 @@ src/
 
 1. Root layout checks `useAuthStore` for user state
 2. No user → redirect to `(auth)/sign-in`
-3. User without `onboardingCompletedAt` → redirect to `onboarding`
-4. Authenticated user → `(app)/(tabs)` (home)
+3. User without GitHub PAT → redirect to PAT linking screen
+4. Authenticated user with PAT → `(app)/(tabs)` (boards list)
+
+## GitHub PAT linking
+
+Users provide a GitHub Personal Access Token with `project` scope.
+The PAT is stored securely in Supabase (encrypted) and used to query
+the GitHub Projects v2 GraphQL API on behalf of the user.
 
 ## Shared package
 
@@ -86,11 +103,11 @@ See `docs/SETUP.md` for full setup instructions including EAS Build.
 
 ## Deep linking
 
-URL scheme: `starter-native://`
+URL scheme: `gitlist://`
 
-Auth callback: `starter-native://callback`
-- PKCE code flow: `starter-native://callback?code=<code>`
-- Implicit (OAuth hash) flow: `starter-native://callback#access_token=...&refresh_token=...`
+Auth callback: `gitlist://callback`
+- PKCE code flow: `gitlist://callback?code=<code>`
+- Implicit (OAuth hash) flow: `gitlist://callback#access_token=...&refresh_token=...`
 
 `AuthProvider` listens for incoming deep links (`Linking.addEventListener`) and cold-start
 URLs (`Linking.getInitialURL`) and calls `handleAuthDeepLink()` from `src/lib/deep-links.ts`.
@@ -98,18 +115,18 @@ The callback screen handles PKCE code exchange directly via `useLocalSearchParam
 
 Supabase redirect URLs to configure (Authentication → URL Configuration):
 ```
-starter-native://callback
+gitlist://callback
 exp://localhost:8081/--/callback   # Expo Go development
 ```
 
 Test locally:
 ```bash
-npx uri-scheme open "starter-native://callback?code=test" --ios
+npx uri-scheme open "gitlist://callback?code=test" --ios
 ```
 
 ## EAS Build
 
-EAS project ID: `285003f0-7bb7-49dc-9cd9-d676ee46b3f9`
+EAS project ID: `285003f0-7bb7-49dc-9cd9-d676ee46b3f9` ← UPDATE after running `eas init`
 
 ```bash
 eas build --profile development --platform ios   # iOS Simulator dev build

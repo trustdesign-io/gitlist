@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "starter-native",
-    "slug": "starter-native",
+    "name": "Gitlist",
+    "slug": "gitlist",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "scheme": "starter-native",
+    "scheme": "gitlist",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -14,14 +14,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "io.trustdesign.nativestarter",
+      "bundleIdentifier": "io.trustdesign.gitlist",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to let you take photos.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photos to let you share images."
       }
     },
     "android": {
-      "package": "io.trustdesign.nativestarter",
+      "package": "io.trustdesign.gitlist",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
@@ -37,10 +37,13 @@
           "action": "VIEW",
           "data": [
             {
-              "scheme": "starter-native"
+              "scheme": "gitlist"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -60,13 +63,6 @@
           "backgroundColor": "#2563EB",
           "image": "./assets/splash-icon.png",
           "imageWidth": 200
-        }
-      ],
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "YOUR_SENTRY_ORG",
-          "project": "starter-native"
         }
       ]
     ],
