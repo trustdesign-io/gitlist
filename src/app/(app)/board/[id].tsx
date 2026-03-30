@@ -12,9 +12,13 @@ import {
   TextInput as RNTextInput,
   Modal,
   FlatList,
+  Alert,
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from 'react-native-gesture-handler/ReanimatedSwipeable'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -26,8 +30,13 @@ import {
   fetchBoardItems,
   groupTasksByStatus,
   addDraftTask,
+  fetchStatusField,
+  findDoneOption,
+  setTaskStatus,
+  removeTaskFromBoard,
   type BoardColumn,
   type Task,
+  type StatusField,
 } from '../../../lib/github'
 import { fetchBoardFields } from '../../../lib/board-fields'
 import { useTasksStore } from '../../../stores/tasks-store'
@@ -135,10 +144,11 @@ const labelChipStyles = StyleSheet.create({
 interface TaskCardProps {
   task: Task
   theme: ReturnType<typeof useTheme>['theme']
+  isCompleting?: boolean
   onPress: () => void
 }
 
-function TaskCard({ task, theme, onPress }: TaskCardProps) {
+function TaskCard({ task, theme, isCompleting, onPress }: TaskCardProps) {
   const s = useMemo(() => taskCardStyles(theme), [theme])
   return (
     <Pressable
@@ -146,9 +156,12 @@ function TaskCard({ task, theme, onPress }: TaskCardProps) {
       accessibilityRole="button"
       accessibilityLabel={task.title}
     >
-      <Card style={s.card}>
+      <Card style={[s.card, isCompleting && s.completingCard]}>
         <View style={s.topRow}>
-          <Text style={s.title} numberOfLines={2}>
+          <Text
+            style={[s.title, isCompleting && s.completingTitle]}
+            numberOfLines={2}
+          >
             {task.title}
           </Text>
           {task.issueNumber != null && (
@@ -185,6 +198,7 @@ function TaskCard({ task, theme, onPress }: TaskCardProps) {
 function taskCardStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     card: { marginBottom: spacing[2] },
+    completingCard: { opacity: 0.4 },
     topRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -197,6 +211,10 @@ function taskCardStyles(theme: ReturnType<typeof useTheme>['theme']) {
       lineHeight: fontSize.sm.lineHeight,
       fontWeight: '600',
       color: theme.colors.foreground,
+    },
+    completingTitle: {
+      textDecorationLine: 'line-through',
+      color: theme.colors.mutedForeground,
     },
     issueNumber: {
       fontSize: fontSize.xs.size,
@@ -224,6 +242,140 @@ function taskCardStyles(theme: ReturnType<typeof useTheme>['theme']) {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Swipe actions
+// ---------------------------------------------------------------------------
+
+function CompleteAction() {
+  return (
+    <View style={completeActionStyles.container}>
+      <Ionicons name="checkmark" size={24} color="#fff" />
+      <Text style={completeActionStyles.label}>Done</Text>
+    </View>
+  )
+}
+
+const completeActionStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.semantic.success,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 88,
+    paddingHorizontal: spacing[4],
+    gap: spacing[1],
+    marginBottom: spacing[2],
+  },
+  label: {
+    color: '#fff',
+    fontSize: fontSize.xs.size,
+    lineHeight: fontSize.xs.lineHeight,
+    fontWeight: '700',
+  },
+})
+
+function DeleteAction() {
+  return (
+    <View style={deleteActionStyles.container}>
+      <Ionicons name="trash-outline" size={22} color="#fff" />
+      <Text style={deleteActionStyles.label}>Remove</Text>
+    </View>
+  )
+}
+
+const deleteActionStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.semantic.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 88,
+    paddingHorizontal: spacing[4],
+    gap: spacing[1],
+    marginBottom: spacing[2],
+  },
+  label: {
+    color: '#fff',
+    fontSize: fontSize.xs.size,
+    lineHeight: fontSize.xs.lineHeight,
+    fontWeight: '700',
+  },
+})
+
+// ---------------------------------------------------------------------------
+// Swipeable row
+// ---------------------------------------------------------------------------
+
+interface SwipeableRowProps {
+  task: Task
+  theme: ReturnType<typeof useTheme>['theme']
+  canComplete: boolean
+  isCompleting: boolean
+  onPress: () => void
+  onComplete: (task: Task) => void
+  onDelete: (task: Task) => void
+}
+
+function SwipeableRow({
+  task,
+  theme,
+  canComplete,
+  isCompleting,
+  onPress,
+  onComplete,
+  onDelete,
+}: SwipeableRowProps) {
+  const swipeableRef = useRef<SwipeableMethods | null>(null)
+
+  const handleSwipeOpen = useCallback(
+    (direction: 'left' | 'right') => {
+      if (direction === 'left') {
+        swipeableRef.current?.reset()
+        onComplete(task)
+      } else {
+        const truncated =
+          task.title.length > 50 ? task.title.slice(0, 47) + '...' : task.title
+        Alert.alert('Remove from board', `Remove "${truncated}"?`, [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => swipeableRef.current?.close(),
+          },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              swipeableRef.current?.close()
+              onDelete(task)
+            },
+          },
+        ])
+      }
+    },
+    [task, onComplete, onDelete]
+  )
+
+  return (
+    <View style={rowStyles.padding}>
+      <ReanimatedSwipeable
+        ref={swipeableRef}
+        renderLeftActions={canComplete ? () => <CompleteAction /> : undefined}
+        renderRightActions={() => <DeleteAction />}
+        onSwipeableOpen={handleSwipeOpen}
+        friction={2}
+        leftThreshold={80}
+        rightThreshold={80}
+        overshootLeft={false}
+        overshootRight={false}
+      >
+        <TaskCard task={task} theme={theme} isCompleting={isCompleting} onPress={onPress} />
+      </ReanimatedSwipeable>
+    </View>
+  )
+}
+
+const rowStyles = StyleSheet.create({
+  padding: { paddingHorizontal: spacing[5], paddingTop: spacing[2] },
+})
 
 // ---------------------------------------------------------------------------
 // Section header
@@ -332,7 +484,7 @@ function QuickAddBar({ onSubmit, theme, bottomInset }: QuickAddBarProps) {
       <View style={s.bar}>
         <RNTextInput
           style={s.input}
-          placeholder="Add a task…"
+          placeholder="Add a task..."
           placeholderTextColor={theme.colors.mutedForeground}
           value={title}
           onChangeText={setTitle}
@@ -580,6 +732,104 @@ function pickerStyles(theme: ReturnType<typeof useTheme>['theme']) {
 }
 
 // ---------------------------------------------------------------------------
+// Undo toast
+// ---------------------------------------------------------------------------
+
+interface UndoToastProps {
+  visible: boolean
+  label: string
+  onUndo: () => void
+  theme: ReturnType<typeof useTheme>['theme']
+}
+
+function UndoToast({ visible, label, onUndo, theme }: UndoToastProps) {
+  const s = useMemo(() => undoToastStyles(theme), [theme])
+  if (!visible) return null
+  return (
+    <View style={s.overlay} pointerEvents="box-none">
+      <View style={s.toast}>
+        <Text style={s.label} numberOfLines={1}>
+          {label}
+        </Text>
+        <Pressable
+          onPress={onUndo}
+          style={s.undoButton}
+          accessibilityRole="button"
+          accessibilityLabel="Undo"
+          hitSlop={8}
+        >
+          <Text style={s.undoLabel}>Undo</Text>
+        </Pressable>
+      </View>
+    </View>
+  )
+}
+
+function undoToastStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    overlay: {
+      position: 'absolute',
+      bottom: spacing[8],
+      left: spacing[5],
+      right: spacing[5],
+      alignItems: 'center',
+    },
+    toast: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.colors.foreground,
+      borderRadius: borderRadius['xl'],
+      paddingVertical: spacing[3],
+      paddingHorizontal: spacing[4],
+      gap: spacing[3],
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    label: {
+      flex: 1,
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.background,
+    },
+    undoButton: {
+      paddingHorizontal: spacing[2],
+      paddingVertical: spacing[1],
+    },
+    undoLabel: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      fontWeight: '700',
+      color: theme.colors.primary,
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Pending undo state
+// ---------------------------------------------------------------------------
+
+type PendingUndo =
+  | {
+      type: 'complete'
+      task: Task
+      boardId: string
+      removeTimerId: ReturnType<typeof setTimeout>
+      apiTimerId: ReturnType<typeof setTimeout>
+      fieldId: string
+      doneOptionId: string
+    }
+  | {
+      type: 'delete'
+      task: Task
+      boardId: string
+      apiTimerId: ReturnType<typeof setTimeout>
+    }
+
+// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 
@@ -592,6 +842,11 @@ export default function BoardScreen() {
   const insets = useSafeAreaInsets()
 
   const [pickerVisible, setPickerVisible] = useState(false)
+  const [statusField, setStatusFieldState] = useState<StatusField | null>(null)
+  const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+  const [undoToastVisible, setUndoToastVisible] = useState(false)
+  const [undoToastLabel, setUndoToastLabel] = useState('')
+  const pendingUndo = useRef<PendingUndo | null>(null)
 
   const {
     tasksByBoard,
@@ -603,6 +858,7 @@ export default function BoardScreen() {
     prependTask,
     removeTask,
     replaceTask,
+    insertTask,
   } = useTasksStore()
   const setFields = useFieldsStore((state) => state.setFields)
   const boards = useBoardsStore((state) => state.boards)
@@ -626,7 +882,7 @@ export default function BoardScreen() {
           onPress={() => setPickerVisible(true)}
           style={headerTitleStyles.button}
           accessibilityRole="button"
-          accessibilityLabel={`${title} — tap to switch board`}
+          accessibilityLabel={`${title} - tap to switch board`}
         >
           <Text style={[headerTitleStyles.text, { color: theme.colors.foreground }]}>
             {title}
@@ -674,7 +930,6 @@ export default function BoardScreen() {
     }
   }, [id, user?.id, isAllBoards, setTasks, setLoading, setError, setFields])
 
-  // Load tasks for all boards when in aggregate view
   const loadAllBoardsTasks = useCallback(async () => {
     if (!isAllBoards || !user?.id || boards.length === 0) return
 
@@ -686,14 +941,12 @@ export default function BoardScreen() {
         setError('Could not retrieve your GitHub token. Try relinking your account.')
         return
       }
-      // Serve cached data first
       for (const b of boards) {
         const cached = getCached<Task[]>(['tasks', user.id, b.id])
         if (cached && !tasksByBoard[b.id]) {
           setTasks(b.id, cached)
         }
       }
-      // Fetch all boards in parallel — only those not already loaded
       const unloaded = boards.filter((b) => !tasksByBoard[b.id])
       await Promise.all(
         unloaded.map(async (b) => {
@@ -708,14 +961,58 @@ export default function BoardScreen() {
     }
   }, [isAllBoards, user?.id, boards, tasksByBoard, setTasks, setLoading, setError])
 
+  const loadStatusField = useCallback(async () => {
+    if (!id || !user?.id) return
+    const cached = getCached<StatusField>(['status-field', id])
+    if (cached) {
+      setStatusFieldState(cached)
+      return
+    }
+    try {
+      const pat = await fetchGithubPAT(user.id)
+      if (!pat) return
+      const field = await fetchStatusField(pat, id)
+      if (field) {
+        setCached(['status-field', id], field)
+        setStatusFieldState(field)
+      }
+    } catch {
+      // Non-critical - complete gesture will not be available
+    }
+  }, [id, user?.id])
+
   useEffect(() => {
     if (isAllBoards) {
       void loadAllBoardsTasks()
     } else {
       void loadTasks()
+      void loadStatusField()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user?.id])
+
+  // Commit any pending undo actions when leaving the screen
+  useEffect(() => {
+    return () => {
+      const pending = pendingUndo.current
+      if (!pending) return
+      clearTimeout(pending.apiTimerId)
+      if (pending.type === 'complete') {
+        clearTimeout(pending.removeTimerId)
+      }
+      if (user?.id) {
+        void fetchGithubPAT(user.id).then((pat) => {
+          if (!pat) return
+          if (pending.type === 'complete') {
+            void setTaskStatus(pat, pending.boardId, pending.task.id, pending.fieldId, pending.doneOptionId)
+          } else {
+            void removeTaskFromBoard(pat, pending.boardId, pending.task.id)
+          }
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   const onRefresh = useCallback(() => {
     if (isAllBoards) {
@@ -738,7 +1035,6 @@ export default function BoardScreen() {
     async (title: string) => {
       if (!id || !user?.id) return
 
-      // Optimistic update — temporary task visible immediately
       const tempId = `temp-${Date.now()}`
       const optimisticTask: Task = {
         id: tempId,
@@ -763,7 +1059,6 @@ export default function BoardScreen() {
         const realTask = await addDraftTask(pat, id, title)
         replaceTask(id, tempId, realTask)
 
-        // Sync updated task list to cache
         const current = useTasksStore.getState().tasksByBoard[id] ?? []
         setCached(['tasks', user.id, id], current)
       } catch (err) {
@@ -773,6 +1068,142 @@ export default function BoardScreen() {
     },
     [id, user?.id, prependTask, removeTask, replaceTask]
   )
+
+  const doneOption = useMemo(
+    () => (statusField ? findDoneOption(statusField.options) : undefined),
+    [statusField]
+  )
+
+  const showUndoToast = useCallback((label: string) => {
+    setUndoToastLabel(label)
+    setUndoToastVisible(true)
+  }, [])
+
+  const hideUndoToast = useCallback(() => {
+    setUndoToastVisible(false)
+  }, [])
+
+  const handleComplete = useCallback(
+    (task: Task) => {
+      if (!id || !user?.id || !statusField || !doneOption) return
+
+      if (pendingUndo.current) {
+        const prev = pendingUndo.current
+        clearTimeout(prev.apiTimerId)
+        if (prev.type === 'complete') clearTimeout(prev.removeTimerId)
+        void fetchGithubPAT(user.id).then((pat) => {
+          if (!pat) return
+          if (prev.type === 'complete') {
+            void setTaskStatus(pat, prev.boardId, prev.task.id, prev.fieldId, prev.doneOptionId)
+          } else {
+            void removeTaskFromBoard(pat, prev.boardId, prev.task.id)
+          }
+        })
+        pendingUndo.current = null
+        hideUndoToast()
+      }
+
+      setCompletingIds((prev) => new Set([...prev, task.id]))
+
+      const removeTimerId = setTimeout(() => {
+        removeTask(id, task.id)
+        setCompletingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(task.id)
+          return next
+        })
+      }, 350)
+
+      const truncated = task.title.length > 25 ? task.title.slice(0, 22) + '...' : task.title
+      showUndoToast(`Completed "${truncated}"`)
+
+      const apiTimerId = setTimeout(() => {
+        pendingUndo.current = null
+        hideUndoToast()
+        void fetchGithubPAT(user.id).then((pat) => {
+          if (!pat) return
+          void setTaskStatus(pat, id, task.id, statusField.fieldId, doneOption.id).catch(() => {})
+        })
+      }, 5000)
+
+      pendingUndo.current = {
+        type: 'complete',
+        task,
+        boardId: id,
+        removeTimerId,
+        apiTimerId,
+        fieldId: statusField.fieldId,
+        doneOptionId: doneOption.id,
+      }
+    },
+    [id, user?.id, statusField, doneOption, removeTask, showUndoToast, hideUndoToast]
+  )
+
+  const handleDelete = useCallback(
+    (task: Task) => {
+      if (!id || !user?.id) return
+
+      if (pendingUndo.current) {
+        const prev = pendingUndo.current
+        clearTimeout(prev.apiTimerId)
+        if (prev.type === 'complete') clearTimeout(prev.removeTimerId)
+        void fetchGithubPAT(user.id).then((pat) => {
+          if (!pat) return
+          if (prev.type === 'complete') {
+            void setTaskStatus(pat, prev.boardId, prev.task.id, prev.fieldId, prev.doneOptionId)
+          } else {
+            void removeTaskFromBoard(pat, prev.boardId, prev.task.id)
+          }
+        })
+        pendingUndo.current = null
+        hideUndoToast()
+      }
+
+      removeTask(id, task.id)
+
+      const truncated = task.title.length > 25 ? task.title.slice(0, 22) + '...' : task.title
+      showUndoToast(`Removed "${truncated}"`)
+
+      const apiTimerId = setTimeout(() => {
+        pendingUndo.current = null
+        hideUndoToast()
+        void fetchGithubPAT(user.id).then((pat) => {
+          if (!pat) return
+          void removeTaskFromBoard(pat, id, task.id).catch(() => {})
+        })
+      }, 5000)
+
+      pendingUndo.current = {
+        type: 'delete',
+        task,
+        boardId: id,
+        apiTimerId,
+      }
+    },
+    [id, user?.id, removeTask, showUndoToast, hideUndoToast]
+  )
+
+  const handleUndo = useCallback(() => {
+    const pending = pendingUndo.current
+    if (!pending) return
+    clearTimeout(pending.apiTimerId)
+    if (pending.type === 'complete') {
+      clearTimeout(pending.removeTimerId)
+      setCompletingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(pending.task.id)
+        return next
+      })
+      const currentTasks = useTasksStore.getState().tasksByBoard[pending.boardId] ?? []
+      if (!currentTasks.find((t) => t.id === pending.task.id)) {
+        insertTask(pending.boardId, pending.task)
+      }
+    } else {
+      insertTask(pending.boardId, pending.task)
+    }
+    pendingUndo.current = null
+    hideUndoToast()
+  }, [insertTask, hideUndoToast])
 
   const { theme: t } = useTheme()
   const s = useMemo(() => styles(t), [t])
@@ -789,7 +1220,6 @@ export default function BoardScreen() {
     [columns]
   )
 
-  // Aggregate sections for "All Boards" view
   const allBoardsSections = useMemo(() => {
     if (!isAllBoards) return []
     return boards
@@ -865,7 +1295,6 @@ export default function BoardScreen() {
 
   // ---- Single Board view ----
 
-  // Loading skeleton — no quick-add during initial load
   if (isLoading && tasks === null) {
     return (
       <>
@@ -886,7 +1315,6 @@ export default function BoardScreen() {
     )
   }
 
-  // Hard error with no cached data — no quick-add
   if (error && tasks === null) {
     return (
       <>
@@ -919,7 +1347,6 @@ export default function BoardScreen() {
     )
   }
 
-  // Empty state + task list — both include the quick-add bar
   return (
     <>
       <KeyboardAvoidingView
@@ -937,7 +1364,7 @@ export default function BoardScreen() {
           </View>
         ) : (
           <SectionList
-            style={s.container}
+            style={s.list}
             contentContainerStyle={s.content}
             sections={sections}
             keyExtractor={(item) => item.id}
@@ -946,18 +1373,20 @@ export default function BoardScreen() {
               <SectionHeader title={section.title} count={section.count} theme={theme} />
             )}
             renderItem={({ item }) => (
-              <View style={s.taskPadding}>
-                <TaskCard
-                  task={item}
-                  theme={theme}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/(app)/task/[id]',
-                      params: { id: item.id, boardId: id },
-                    })
-                  }
-                />
-              </View>
+              <SwipeableRow
+                task={item}
+                theme={theme}
+                canComplete={doneOption != null}
+                isCompleting={completingIds.has(item.id)}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(app)/task/[id]',
+                    params: { id: item.id, boardId: id },
+                  })
+                }
+                onComplete={handleComplete}
+                onDelete={handleDelete}
+              />
             )}
             refreshControl={
               <RefreshControl
@@ -976,6 +1405,12 @@ export default function BoardScreen() {
           bottomInset={insets.bottom}
         />
       </KeyboardAvoidingView>
+      <UndoToast
+        visible={undoToastVisible}
+        label={undoToastLabel}
+        onUndo={handleUndo}
+        theme={theme}
+      />
       {pickerVisible && (
         <BoardPickerModal
           currentBoardId={id ?? ''}
@@ -1005,7 +1440,8 @@ const headerTitleStyles = StyleSheet.create({
 function styles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.muted },
-    content: { paddingBottom: spacing[4] },
+    list: { flex: 1 },
+    content: { paddingBottom: spacing[8] },
     taskPadding: { paddingHorizontal: spacing[5], paddingTop: spacing[2] },
     centered: {
       flex: 1,

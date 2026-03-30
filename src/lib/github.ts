@@ -677,6 +677,71 @@ export async function addDraftTask(pat: string, projectId: string, title: string
 }
 
 // ---------------------------------------------------------------------------
+// Status field + task mutations (for swipe gestures)
+// ---------------------------------------------------------------------------
+
+export interface StatusField {
+  fieldId: string
+  options: { id: string; name: string }[]
+}
+
+interface FetchStatusFieldResponse {
+  node: {
+    fields: {
+      nodes: Array<{ id?: string; name?: string; options?: Array<{ id: string; name: string }> }>
+    }
+  }
+}
+
+const FETCH_STATUS_FIELD_QUERY = `query FetchStatusField($projectId:ID!){node(id:$projectId){... on ProjectV2{fields(first:20){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}`
+
+export async function fetchStatusField(
+  pat: string,
+  projectId: string
+): Promise<StatusField | null> {
+  const data = await githubGraphQL<FetchStatusFieldResponse>(
+    pat,
+    FETCH_STATUS_FIELD_QUERY,
+    { projectId }
+  )
+  const statusNode = data.node.fields.nodes.find(
+    (f) => f.name?.toLowerCase() === 'status' && f.options != null
+  )
+  if (!statusNode?.id || !statusNode.options) return null
+  return { fieldId: statusNode.id, options: statusNode.options }
+}
+
+const DONE_NAMES = new Set(['done', 'complete', 'completed', 'closed'])
+
+export function findDoneOption(
+  options: { id: string; name: string }[]
+): { id: string; name: string } | undefined {
+  return options.find((o) => DONE_NAMES.has(o.name.toLowerCase()))
+}
+
+const SET_TASK_STATUS_MUTATION = `mutation SetTaskStatus($projectId:ID!,$itemId:ID!,$fieldId:ID!,$optionId:String!){updateProjectV2ItemFieldValue(input:{projectId:$projectId itemId:$itemId fieldId:$fieldId value:{singleSelectOptionId:$optionId}}){projectV2Item{id}}}`
+
+export async function setTaskStatus(
+  pat: string,
+  projectId: string,
+  itemId: string,
+  fieldId: string,
+  optionId: string
+): Promise<void> {
+  await githubGraphQL(pat, SET_TASK_STATUS_MUTATION, { projectId, itemId, fieldId, optionId })
+}
+
+const REMOVE_TASK_MUTATION = `mutation RemoveTask($projectId:ID!,$itemId:ID!){deleteProjectV2Item(input:{projectId:$projectId itemId:$itemId}){deletedItemId}}`
+
+export async function removeTaskFromBoard(
+  pat: string,
+  projectId: string,
+  itemId: string
+): Promise<void> {
+  await githubGraphQL(pat, REMOVE_TASK_MUTATION, { projectId, itemId })
+}
+
+// ---------------------------------------------------------------------------
 
 /** Execute a GraphQL query against the GitHub API using a PAT. */
 export async function githubGraphQL<T>(
