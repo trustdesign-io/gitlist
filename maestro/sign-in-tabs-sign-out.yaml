@@ -1,0 +1,40 @@
+appId: com.trustdesign.starternative
+---
+# E2E flow: Sign in → Tab navigation → Sign out
+# Prerequisites:
+#   - App running on a development build (not Expo Go)
+#   - An existing account with these credentials in your Supabase project
+
+- launchApp:
+    clearState: true
+
+# ── Sign In ──────────────────────────────────────────────────────────────────
+
+- assertVisible: "Welcome back"
+
+- tapOn: "Email"
+- inputText: "e2e@example.com"
+
+- tapOn: "Password"
+- inputText: "TestPassword123!"
+
+- tapOn: "Sign in"
+
+# ── Tab navigation ───────────────────────────────────────────────────────────
+
+- assertVisible: "Welcome to starter-native"
+
+- tapOn: "Explore"
+- assertVisible: "Explore"
+
+- tapOn: "Account"
+- assertVisible: "Account"
+
+# ── Sign out ─────────────────────────────────────────────────────────────────
+
+- tapOn: "Sign out"
+
+# Confirm the destructive action alert
+- tapOn: "Sign out"
+
+- assertVisible: "Welcome back"

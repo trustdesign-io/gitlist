@@ -1,0 +1,46 @@
+appId: com.trustdesign.starternative
+---
+# E2E flow: Sign up → Onboarding → Home screen
+# Prerequisites: app running on a development build (not Expo Go)
+# Note: use a unique email each run, or delete the account in Supabase between runs
+
+- launchApp:
+    clearState: true
+
+# ── Sign Up ─────────────────────────────────────────────────────────────────
+
+- assertVisible: "Welcome back"
+
+- tapOn: "Sign up"
+
+- tapOn: "Name"
+- inputText: "Test User"
+
+- tapOn: "Email"
+- inputText: "e2e+signup@example.com"
+
+- tapOn: "Password"
+- inputText: "TestPassword123!"
+
+- tapOn: "Create account"
+
+# Dismiss the "Check your email" confirmation alert
+- tapOn: "OK"
+
+# ── Onboarding ───────────────────────────────────────────────────────────────
+
+- assertVisible: "Welcome"
+
+- tapOn: "Next"
+
+- assertVisible: "Stay connected"
+- tapOn: "Next"
+
+# Note: the apostrophe below is U+2019 (right single quotation mark) to match
+# the app's string literal exactly
+- assertVisible: "You\u2019re all set"
+- tapOn: "Get started"
+
+# ── Home screen ──────────────────────────────────────────────────────────────
+
+- assertVisible: "Welcome to starter-native"

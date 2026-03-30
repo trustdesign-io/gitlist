@@ -1,0 +1,87 @@
+{
+  "name": "starter-native",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
+    "test": "jest",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^3.0.1",
+    "@supabase/supabase-js": "^2.99.1",
+    "@trustdesign/shared": "github:trustdesign-io/trustdesign-shared",
+    "expo": "~55.0.6",
+    "expo-constants": "^55.0.7",
+    "expo-font": "~55.0.4",
+    "expo-haptics": "~55.0.8",
+    "expo-image": "~55.0.6",
+    "expo-linking": "^55.0.7",
+    "expo-notifications": "~55.0.12",
+    "expo-router": "^55.0.5",
+    "expo-secure-store": "^55.0.8",
+    "expo-splash-screen": "~55.0.10",
+    "expo-status-bar": "~55.0.4",
+    "expo-updates": "~55.0.13",
+    "react": "19.2.0",
+    "react-native": "0.83.2",
+    "react-native-gesture-handler": "~2.30.0",
+    "react-native-reanimated": "4.2.1",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0",
+    "react-native-worklets-core": "^1.6.3",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^13.3.3",
+    "@types/jest": "^30.0.0",
+    "@types/react": "~19.2.2",
+    "eslint": "^9.39.4",
+    "eslint-config-expo": "^55.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.3.0",
+    "jest-expo": "^55.0.9",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
+  },
+  "private": true,
+  "jest": {
+    "preset": "jest-expo",
+    "setupFilesAfterEnv": [
+      "@testing-library/jest-native/extend-expect",
+      "<rootDir>/jest.setup.js"
+    ],
+    "moduleNameMapper": {
+      "^@trustdesign/shared/schemas$": "<rootDir>/node_modules/@trustdesign/shared/dist/schemas/index.js",
+      "^@trustdesign/shared/types$": "<rootDir>/node_modules/@trustdesign/shared/dist/types/index.js",
+      "^@trustdesign/shared/supabase$": "<rootDir>/node_modules/@trustdesign/shared/dist/supabase/index.js",
+      "^@trustdesign/shared/tokens$": "<rootDir>/node_modules/@trustdesign/shared/dist/tokens/index.js",
+      "^@trustdesign/shared/eslint$": "<rootDir>/node_modules/@trustdesign/shared/dist/eslint/index.js",
+      "^@trustdesign/shared$": "<rootDir>/node_modules/@trustdesign/shared/dist/index.js",
+      "^expo/src/winter$": "<rootDir>/__mocks__/expo-winter.js",
+      "^expo/src/winter/(.*)$": "<rootDir>/__mocks__/expo-winter.js"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@trustdesign/.*)"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/\\.expo/"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.{ts,tsx}",
+      "!src/**/*.d.ts"
+    ]
+  }
+}

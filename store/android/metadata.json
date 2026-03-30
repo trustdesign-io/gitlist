@@ -1,0 +1,29 @@
+{
+  "info": {
+    "en-US": {
+      "title": "Your App Name",
+      "shortDescription": "A short description (80 chars max)",
+      "fullDescription": "A full description of your app for Google Play. Describe what the app does, its key features, and why users should install it. This can be up to 4000 characters.\n\nKey features:\n- Feature one\n- Feature two\n- Feature three",
+      "video": "",
+      "privacyPolicyUrl": "https://yourapp.com/privacy",
+      "termsOfServiceUrl": "https://yourapp.com/terms"
+    }
+  },
+  "primaryLocale": "en-US",
+  "categories": ["PRODUCTIVITY"],
+  "screenshots": {
+    "en-US": {
+      "PHONE": [
+        "screenshots/android/phone-1.png",
+        "screenshots/android/phone-2.png",
+        "screenshots/android/phone-3.png"
+      ],
+      "TABLET_7": [
+        "screenshots/android/tablet-7-1.png"
+      ],
+      "TABLET_10": [
+        "screenshots/android/tablet-10-1.png"
+      ]
+    }
+  }
+}

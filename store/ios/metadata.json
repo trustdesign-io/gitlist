@@ -1,0 +1,33 @@
+{
+  "info": {
+    "en-US": {
+      "title": "Your App Name",
+      "subtitle": "A short tagline (30 chars max)",
+      "description": "A full description of your app for the App Store. Describe what the app does, its key features, and why users should download it. This can be up to 4000 characters.\n\nKey features:\n- Feature one\n- Feature two\n- Feature three",
+      "keywords": "keyword1, keyword2, keyword3",
+      "releaseNotes": "Bug fixes and performance improvements.",
+      "supportUrl": "https://yourapp.com/support",
+      "marketingUrl": "https://yourapp.com",
+      "privacyPolicyUrl": "https://yourapp.com/privacy"
+    }
+  },
+  "categories": ["UTILITIES"],
+  "primaryLocale": "en-US",
+  "screenshots": {
+    "en-US": {
+      "APP_IPHONE_67": [
+        "screenshots/ios/iphone-67-1.png",
+        "screenshots/ios/iphone-67-2.png",
+        "screenshots/ios/iphone-67-3.png"
+      ],
+      "APP_IPHONE_65": [
+        "screenshots/ios/iphone-65-1.png",
+        "screenshots/ios/iphone-65-2.png",
+        "screenshots/ios/iphone-65-3.png"
+      ],
+      "APP_IPAD_PRO_3GEN_129": [
+        "screenshots/ios/ipad-pro-129-1.png"
+      ]
+    }
+  }
+}

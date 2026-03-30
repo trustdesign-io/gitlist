@@ -1,0 +1,91 @@
+{
+  "expo": {
+    "name": "starter-native",
+    "slug": "starter-native",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "starter-native",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2563EB"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "io.trustdesign.nativestarter",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to let you take photos.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photos to let you share images."
+      }
+    },
+    "android": {
+      "package": "io.trustdesign.nativestarter",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "NOTIFICATIONS",
+        "VIBRATE"
+      ],
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "starter-native"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-image",
+      "expo-notifications",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#2563EB",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "YOUR_SENTRY_ORG",
+          "project": "starter-native"
+        }
+      ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/285003f0-7bb7-49dc-9cd9-d676ee46b3f9",
+      "fallbackToCacheTimeout": 5000
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "285003f0-7bb7-49dc-9cd9-d676ee46b3f9"
+      },
+      "router": {}
+    },
+    "experiments": {
+      "typedRoutes": true
+    },
+    "owner": "designtechnologist"
+  }
+}
