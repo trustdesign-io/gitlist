@@ -7,7 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native'
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'expo-router'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { useCurrentUser } from '../../../hooks/use-current-user'
@@ -19,6 +19,7 @@ import { useBoardsStore } from '../../../stores/boards-store'
 import { fetchUserBoards, type Board } from '../../../lib/github'
 import { fetchGithubPAT } from '../../../lib/github-pat'
 import { getCached, setCached } from '../../../lib/cache'
+import { getLastBoardId, getLastViewedAt } from '../../../lib/last-board'
 
 function formatUpdatedAt(iso: string): string {
   const date = new Date(iso)
@@ -34,23 +35,33 @@ function formatUpdatedAt(iso: string): string {
 
 interface BoardCardProps {
   board: Board
+  hasUnread: boolean
   theme: ReturnType<typeof useTheme>['theme']
   onPress: () => void
 }
 
-function BoardCard({ board, theme, onPress }: BoardCardProps) {
+function BoardCard({ board, hasUnread, theme, onPress }: BoardCardProps) {
   const s = useMemo(() => cardStyles(theme), [theme])
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Open board ${board.title}`}
+      accessibilityLabel={`Open board ${board.title}${hasUnread ? ', has recent updates' : ''}`}
     >
       <Card style={s.card}>
         <View style={s.header}>
-          <Text style={s.title} numberOfLines={2}>
-            {board.title}
-          </Text>
+          <View style={s.titleRow}>
+            <Text style={s.title} numberOfLines={2}>
+              {board.title}
+            </Text>
+            {hasUnread && (
+              <View
+                style={s.unreadDot}
+                accessibilityLabel="Recent updates"
+                accessibilityRole="image"
+              />
+            )}
+          </View>
           <Badge
             label={`${board.itemCount} item${board.itemCount !== 1 ? 's' : ''}`}
             variant="secondary"
@@ -70,10 +81,44 @@ function BoardCard({ board, theme, onPress }: BoardCardProps) {
 function cardStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     card: { marginBottom: spacing[3] },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing[3] },
-    title: { flex: 1, fontSize: fontSize.base.size, lineHeight: fontSize.base.lineHeight, fontWeight: '600', color: theme.colors.foreground },
-    description: { marginTop: spacing[1], fontSize: fontSize.sm.size, lineHeight: fontSize.sm.lineHeight, color: theme.colors.mutedForeground },
-    updatedAt: { marginTop: spacing[2], fontSize: fontSize.xs.size, lineHeight: fontSize.xs.lineHeight, color: theme.colors.mutedForeground },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: spacing[3],
+    },
+    titleRow: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+    },
+    title: {
+      flex: 1,
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    unreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: theme.colors.primary,
+      flexShrink: 0,
+    },
+    description: {
+      marginTop: spacing[1],
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+    },
+    updatedAt: {
+      marginTop: spacing[2],
+      fontSize: fontSize.xs.size,
+      lineHeight: fontSize.xs.lineHeight,
+      color: theme.colors.mutedForeground,
+    },
   })
 }
 
@@ -94,7 +139,12 @@ function SkeletonCard({ theme }: { theme: ReturnType<typeof useTheme>['theme'] }
 function skeletonStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     card: { marginBottom: spacing[3] },
-    titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3] },
+    titleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing[3],
+    },
     shimmer: { backgroundColor: theme.colors.muted, borderRadius: 6 },
     titleBlock: { flex: 1, height: 18 },
     badgeBlock: { width: 64, height: 22, borderRadius: 99 },
@@ -109,11 +159,11 @@ export default function BoardsScreen() {
   const router = useRouter()
   const { boards, isLoading, error, setBoards, setLoading, setError } = useBoardsStore()
   const s = useMemo(() => styles(theme), [theme])
+  const didRedirect = useRef(false)
 
   const loadBoards = useCallback(async () => {
     if (!user?.id) return
 
-    // Serve cached data immediately so the screen renders without a spinner
     const cached = getCached<Board[]>(['boards', user.id])
     if (cached) {
       setBoards(cached)
@@ -148,9 +198,41 @@ export default function BoardsScreen() {
     void loadBoards()
   }, [loadBoards])
 
+  // On first render, redirect to the last-viewed board if one is saved
+  useEffect(() => {
+    if (!user?.id || didRedirect.current) return
+    const lastId = getLastBoardId(user.id)
+    if (lastId) {
+      didRedirect.current = true
+      router.push({ pathname: '/(app)/board/[id]', params: { id: lastId } })
+    }
+  }, [user?.id, router])
+
   const onRefresh = useCallback(() => {
     void loadBoards()
   }, [loadBoards])
+
+  const navigateToBoard = useCallback(
+    (boardId: string) => {
+      router.push({ pathname: '/(app)/board/[id]', params: { id: boardId } })
+    },
+    [router]
+  )
+
+  // Compute unread state per board based on MMKV last-viewed timestamps
+  const unreadBoardIds = useMemo(() => {
+    if (!user?.id) return new Set<string>()
+    const ids = new Set<string>()
+    for (const board of boards) {
+      const lastViewedAt = getLastViewedAt(user.id, board.id)
+      if (lastViewedAt === null) continue // Never viewed — not "unread", just new
+      const boardUpdatedAt = new Date(board.updatedAt).getTime()
+      if (boardUpdatedAt > lastViewedAt) {
+        ids.add(board.id)
+      }
+    }
+    return ids
+  }, [boards, user?.id])
 
   if (isLoading && boards.length === 0) {
     return (
@@ -194,12 +276,13 @@ export default function BoardsScreen() {
       data={boards}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
-          <BoardCard
-            board={item}
-            theme={theme}
-            onPress={() => router.push(`/(app)/board/${item.id}`)}
-          />
-        )}
+        <BoardCard
+          board={item}
+          hasUnread={unreadBoardIds.has(item.id)}
+          theme={theme}
+          onPress={() => navigateToBoard(item.id)}
+        />
+      )}
       refreshControl={
         <RefreshControl
           refreshing={isLoading}
@@ -226,12 +309,53 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
     content: { padding: spacing[5] },
     centered: { justifyContent: 'center', alignItems: 'center', padding: spacing[8] },
     emptyContainer: { flex: 1, padding: spacing[5] },
-    emptyInner: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing[3] },
-    emptyTitle: { fontSize: fontSize.lg.size, lineHeight: fontSize.lg.lineHeight, fontWeight: '600', color: theme.colors.foreground },
-    emptyBody: { fontSize: fontSize.sm.size, lineHeight: fontSize.sm.lineHeight, color: theme.colors.mutedForeground, textAlign: 'center' },
-    errorTitle: { marginTop: spacing[4], fontSize: fontSize.lg.size, lineHeight: fontSize.lg.lineHeight, fontWeight: '600', color: theme.colors.foreground },
-    errorBody: { marginTop: spacing[2], fontSize: fontSize.sm.size, lineHeight: fontSize.sm.lineHeight, color: theme.colors.mutedForeground, textAlign: 'center' },
-    retryButton: { marginTop: spacing[6], backgroundColor: theme.colors.primary, paddingVertical: spacing[3], paddingHorizontal: spacing[6], borderRadius: 12, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-    retryLabel: { fontSize: fontSize.base.size, lineHeight: fontSize.base.lineHeight, fontWeight: '600', color: colors.surface.background },
+    emptyInner: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: spacing[3],
+    },
+    emptyTitle: {
+      fontSize: fontSize.lg.size,
+      lineHeight: fontSize.lg.lineHeight,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    emptyBody: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+      textAlign: 'center',
+    },
+    errorTitle: {
+      marginTop: spacing[4],
+      fontSize: fontSize.lg.size,
+      lineHeight: fontSize.lg.lineHeight,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    errorBody: {
+      marginTop: spacing[2],
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+      textAlign: 'center',
+    },
+    retryButton: {
+      marginTop: spacing[6],
+      backgroundColor: theme.colors.primary,
+      paddingVertical: spacing[3],
+      paddingHorizontal: spacing[6],
+      borderRadius: 12,
+      minHeight: 44,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    retryLabel: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      fontWeight: '600',
+      color: colors.surface.background,
+    },
   })
 }

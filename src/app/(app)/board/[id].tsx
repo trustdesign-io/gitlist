@@ -10,6 +10,8 @@ import {
   Platform,
   Keyboard,
   TextInput as RNTextInput,
+  Modal,
+  FlatList,
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
@@ -32,8 +34,12 @@ import { useTasksStore } from '../../../stores/tasks-store'
 import { useFieldsStore } from '../../../stores/fields-store'
 import { getCached, setCached } from '../../../lib/cache'
 import { useBoardsStore } from '../../../stores/boards-store'
+import { setLastBoardId, setLastViewedAt } from '../../../lib/last-board'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Card } from '../../../components/ui/Card'
+
+const ALL_BOARDS_ID = 'all'
+const MAX_ITEMS_PER_BOARD = 50
 
 // ---------------------------------------------------------------------------
 // Skeleton
@@ -58,7 +64,12 @@ function SkeletonTaskCard({ theme }: { theme: ReturnType<typeof useTheme>['theme
 function skeletonStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     card: { marginBottom: spacing[2] },
-    titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3] },
+    titleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing[3],
+    },
     row: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[2] },
     shimmer: { backgroundColor: theme.colors.muted, borderRadius: 6 },
     titleBlock: { flex: 1, height: 16 },
@@ -404,6 +415,171 @@ function quickAddStyles(theme: ReturnType<typeof useTheme>['theme'], bottomInset
 }
 
 // ---------------------------------------------------------------------------
+// Board picker modal
+// ---------------------------------------------------------------------------
+
+interface BoardPickerModalProps {
+  currentBoardId: string
+  onSelect: (boardId: string) => void
+  onClose: () => void
+  theme: ReturnType<typeof useTheme>['theme']
+}
+
+interface PickerBoardItem {
+  id: string
+  title: string
+  isAllBoards?: boolean
+}
+
+function BoardPickerModal({ currentBoardId, onSelect, onClose, theme }: BoardPickerModalProps) {
+  const boards = useBoardsStore((state) => state.boards)
+  const insets = useSafeAreaInsets()
+  const s = useMemo(() => pickerStyles(theme), [theme])
+
+  const items: PickerBoardItem[] = [
+    { id: ALL_BOARDS_ID, title: 'All boards', isAllBoards: true },
+    ...boards.map((b) => ({ id: b.id, title: b.title })),
+  ]
+
+  return (
+    <Modal
+      visible
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+      accessibilityViewIsModal
+    >
+      <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
+      <View style={[s.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <View style={s.handle} />
+        <View style={s.header}>
+          <Text style={s.title}>Switch Board</Text>
+          <Pressable
+            onPress={onClose}
+            style={s.closeButton}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
+            <Text style={s.closeLabel}>Cancel</Text>
+          </Pressable>
+        </View>
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => {
+            const isSelected = item.id === currentBoardId
+            return (
+              <Pressable
+                style={[s.boardRow, isSelected && s.boardRowSelected]}
+                onPress={() => onSelect(item.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={item.title}
+              >
+                {item.isAllBoards ? (
+                  <Ionicons
+                    name="albums-outline"
+                    size={20}
+                    color={isSelected ? theme.colors.primary : theme.colors.mutedForeground}
+                    style={s.boardIcon}
+                  />
+                ) : (
+                  <Ionicons
+                    name="git-branch-outline"
+                    size={20}
+                    color={isSelected ? theme.colors.primary : theme.colors.mutedForeground}
+                    style={s.boardIcon}
+                  />
+                )}
+                <Text style={[s.boardName, isSelected && s.boardNameSelected]}>
+                  {item.title}
+                </Text>
+                {isSelected && (
+                  <Ionicons name="checkmark" size={18} color={theme.colors.primary} />
+                )}
+              </Pressable>
+            )
+          }}
+          style={s.list}
+        />
+      </View>
+    </Modal>
+  )
+}
+
+function pickerStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    sheet: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: theme.colors.card,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      maxHeight: '60%',
+    },
+    handle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.colors.border,
+      alignSelf: 'center',
+      marginTop: spacing[3],
+      marginBottom: spacing[2],
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing[5],
+      paddingBottom: spacing[3],
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    title: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      fontWeight: '700',
+      color: theme.colors.foreground,
+    },
+    closeButton: { paddingVertical: spacing[1], paddingLeft: spacing[4] },
+    closeLabel: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      color: theme.colors.primary,
+    },
+    list: { flexGrow: 0 },
+    boardRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing[4],
+      paddingHorizontal: spacing[5],
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    boardRowSelected: {
+      backgroundColor: theme.colors.primary + '0d',
+    },
+    boardIcon: { marginRight: spacing[3] },
+    boardName: {
+      flex: 1,
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      color: theme.colors.foreground,
+    },
+    boardNameSelected: {
+      color: theme.colors.primary,
+      fontWeight: '600',
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 
@@ -414,6 +590,8 @@ export default function BoardScreen() {
   const router = useRouter()
   const navigation = useNavigation()
   const insets = useSafeAreaInsets()
+
+  const [pickerVisible, setPickerVisible] = useState(false)
 
   const {
     tasksByBoard,
@@ -429,17 +607,38 @@ export default function BoardScreen() {
   const setFields = useFieldsStore((state) => state.setFields)
   const boards = useBoardsStore((state) => state.boards)
 
-  const tasks = id ? (tasksByBoard[id] ?? null) : null
-  const board = id ? boards.find((b) => b.id === id) : undefined
+  const isAllBoards = id === ALL_BOARDS_ID
+  const board = isAllBoards ? undefined : boards.find((b) => b.id === id)
 
+  // Persist last-viewed board and record view timestamp
   useEffect(() => {
-    if (board?.title) {
-      navigation.setOptions({ title: board.title })
-    }
-  }, [board?.title, navigation])
+    if (!id || !user?.id || isAllBoards) return
+    setLastBoardId(user.id, id)
+    setLastViewedAt(user.id, id)
+  }, [id, user?.id, isAllBoards])
+
+  // Set tappable header title
+  useEffect(() => {
+    const title = isAllBoards ? 'All Boards' : (board?.title ?? 'Board')
+    navigation.setOptions({
+      headerTitle: () => (
+        <Pressable
+          onPress={() => setPickerVisible(true)}
+          style={headerTitleStyles.button}
+          accessibilityRole="button"
+          accessibilityLabel={`${title} — tap to switch board`}
+        >
+          <Text style={[headerTitleStyles.text, { color: theme.colors.foreground }]}>
+            {title}
+          </Text>
+          <Ionicons name="chevron-down" size={14} color={theme.colors.mutedForeground} />
+        </Pressable>
+      ),
+    })
+  }, [board?.title, isAllBoards, navigation, theme])
 
   const loadTasks = useCallback(async () => {
-    if (!id || !user?.id) return
+    if (!id || !user?.id || isAllBoards) return
 
     const cached = getCached<Task[]>(['tasks', user.id, id])
     if (cached) {
@@ -473,16 +672,67 @@ export default function BoardScreen() {
         setError(`Failed to load tasks: ${message}`)
       }
     }
-  }, [id, user?.id, setTasks, setLoading, setError, setFields])
+  }, [id, user?.id, isAllBoards, setTasks, setLoading, setError, setFields])
+
+  // Load tasks for all boards when in aggregate view
+  const loadAllBoardsTasks = useCallback(async () => {
+    if (!isAllBoards || !user?.id || boards.length === 0) return
+
+    setLoading(true)
+    setError(null)
+    try {
+      const pat = await fetchGithubPAT(user.id)
+      if (!pat) {
+        setError('Could not retrieve your GitHub token. Try relinking your account.')
+        return
+      }
+      // Serve cached data first
+      for (const b of boards) {
+        const cached = getCached<Task[]>(['tasks', user.id, b.id])
+        if (cached && !tasksByBoard[b.id]) {
+          setTasks(b.id, cached)
+        }
+      }
+      // Fetch all boards in parallel — only those not already loaded
+      const unloaded = boards.filter((b) => !tasksByBoard[b.id])
+      await Promise.all(
+        unloaded.map(async (b) => {
+          const result = await fetchBoardItems(pat, b.id)
+          setCached(['tasks', user.id, b.id], result)
+          setTasks(b.id, result)
+        })
+      )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Failed to load tasks: ${message}`)
+    }
+  }, [isAllBoards, user?.id, boards, tasksByBoard, setTasks, setLoading, setError])
 
   useEffect(() => {
-    void loadTasks()
+    if (isAllBoards) {
+      void loadAllBoardsTasks()
+    } else {
+      void loadTasks()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user?.id])
 
   const onRefresh = useCallback(() => {
-    void loadTasks()
-  }, [loadTasks])
+    if (isAllBoards) {
+      void loadAllBoardsTasks()
+    } else {
+      void loadTasks()
+    }
+  }, [isAllBoards, loadAllBoardsTasks, loadTasks])
+
+  const handleBoardSelect = useCallback(
+    (boardId: string) => {
+      setPickerVisible(false)
+      if (boardId === id) return
+      router.replace({ pathname: '/(app)/board/[id]', params: { id: boardId } })
+    },
+    [id, router]
+  )
 
   const handleQuickAdd = useCallback(
     async (title: string) => {
@@ -527,6 +777,8 @@ export default function BoardScreen() {
   const { theme: t } = useTheme()
   const s = useMemo(() => styles(t), [t])
 
+  const tasks = isAllBoards ? null : (id ? (tasksByBoard[id] ?? null) : null)
+
   const columns: BoardColumn[] = useMemo(
     () => (tasks ? groupTasksByStatus(tasks) : []),
     [tasks]
@@ -537,66 +789,30 @@ export default function BoardScreen() {
     [columns]
   )
 
-  // Loading skeleton — no quick-add during initial load
-  if (isLoading && tasks === null) {
-    return (
-      <View style={s.container}>
-        <SkeletonSection theme={theme} />
-        <SkeletonSection theme={theme} />
-        <SkeletonSection theme={theme} />
-      </View>
-    )
-  }
+  // Aggregate sections for "All Boards" view
+  const allBoardsSections = useMemo(() => {
+    if (!isAllBoards) return []
+    return boards
+      .map((b) => {
+        const boardTasks = (tasksByBoard[b.id] ?? []).slice(0, MAX_ITEMS_PER_BOARD)
+        return { title: b.title, data: boardTasks, count: boardTasks.length, boardId: b.id }
+      })
+      .filter((sec) => sec.data.length > 0)
+  }, [isAllBoards, boards, tasksByBoard])
 
-  // Hard error with no cached data — no quick-add
-  if (error && tasks === null) {
+  // ---- All Boards view ----
+  if (isAllBoards) {
     return (
-      <View style={[s.container, s.centered]}>
-        <Ionicons name="alert-circle-outline" size={48} color={theme.colors.mutedForeground} />
-        <Text style={s.errorTitle}>Something went wrong</Text>
-        <Text style={s.errorBody}>{error}</Text>
-        <Pressable
-          style={s.retryButton}
-          onPress={onRefresh}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading tasks"
-        >
-          {isLoading ? (
-            <ActivityIndicator color={colors.surface.background} size="small" />
-          ) : (
-            <Text style={s.retryLabel}>Try again</Text>
-          )}
-        </Pressable>
-      </View>
-    )
-  }
-
-  // Empty state + task list — both include the quick-add bar
-  return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-    >
-      {tasks !== null && tasks.length === 0 ? (
-        <View style={[s.container, s.centered]}>
-          <Ionicons name="checkmark-circle-outline" size={48} color={theme.colors.mutedForeground} />
-          <Text style={s.emptyTitle}>No items yet</Text>
-          <Text style={s.emptyBody}>
-            Add your first task below or add issues to this board in GitHub.
-          </Text>
-        </View>
-      ) : (
+      <>
         <SectionList
           style={s.container}
           contentContainerStyle={s.content}
-          sections={sections}
+          sections={allBoardsSections}
           keyExtractor={(item) => item.id}
-          keyboardShouldPersistTaps="handled"
           renderSectionHeader={({ section }) => (
             <SectionHeader title={section.title} count={section.count} theme={theme} />
           )}
-          renderItem={({ item }) => (
+          renderItem={({ item, section }) => (
             <View style={s.taskPadding}>
               <TaskCard
                 task={item}
@@ -604,7 +820,7 @@ export default function BoardScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/(app)/task/[id]',
-                    params: { id: item.id, boardId: id },
+                    params: { id: item.id, boardId: (section as { boardId: string }).boardId },
                   })
                 }
               />
@@ -618,17 +834,173 @@ export default function BoardScreen() {
             />
           }
           stickySectionHeadersEnabled
+          ListEmptyComponent={
+            isLoading ? (
+              <View style={s.container}>
+                <SkeletonSection theme={theme} />
+                <SkeletonSection theme={theme} />
+              </View>
+            ) : (
+              <View style={s.centered}>
+                <Ionicons name="albums-outline" size={48} color={theme.colors.mutedForeground} />
+                <Text style={s.emptyTitle}>No tasks across boards</Text>
+                <Text style={s.emptyBody}>
+                  Add items to your GitHub boards and they will appear here.
+                </Text>
+              </View>
+            )
+          }
+        />
+        {pickerVisible && (
+          <BoardPickerModal
+            currentBoardId={ALL_BOARDS_ID}
+            onSelect={handleBoardSelect}
+            onClose={() => setPickerVisible(false)}
+            theme={theme}
+          />
+        )}
+      </>
+    )
+  }
+
+  // ---- Single Board view ----
+
+  // Loading skeleton — no quick-add during initial load
+  if (isLoading && tasks === null) {
+    return (
+      <>
+        <View style={s.container}>
+          <SkeletonSection theme={theme} />
+          <SkeletonSection theme={theme} />
+          <SkeletonSection theme={theme} />
+        </View>
+        {pickerVisible && (
+          <BoardPickerModal
+            currentBoardId={id ?? ''}
+            onSelect={handleBoardSelect}
+            onClose={() => setPickerVisible(false)}
+            theme={theme}
+          />
+        )}
+      </>
+    )
+  }
+
+  // Hard error with no cached data — no quick-add
+  if (error && tasks === null) {
+    return (
+      <>
+        <View style={[s.container, s.centered]}>
+          <Ionicons name="alert-circle-outline" size={48} color={theme.colors.mutedForeground} />
+          <Text style={s.errorTitle}>Something went wrong</Text>
+          <Text style={s.errorBody}>{error}</Text>
+          <Pressable
+            style={s.retryButton}
+            onPress={onRefresh}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading tasks"
+          >
+            {isLoading ? (
+              <ActivityIndicator color={colors.surface.background} size="small" />
+            ) : (
+              <Text style={s.retryLabel}>Try again</Text>
+            )}
+          </Pressable>
+        </View>
+        {pickerVisible && (
+          <BoardPickerModal
+            currentBoardId={id ?? ''}
+            onSelect={handleBoardSelect}
+            onClose={() => setPickerVisible(false)}
+            theme={theme}
+          />
+        )}
+      </>
+    )
+  }
+
+  // Empty state + task list — both include the quick-add bar
+  return (
+    <>
+      <KeyboardAvoidingView
+        style={s.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      >
+        {tasks !== null && tasks.length === 0 ? (
+          <View style={[s.container, s.centered]}>
+            <Ionicons name="checkmark-circle-outline" size={48} color={theme.colors.mutedForeground} />
+            <Text style={s.emptyTitle}>No items yet</Text>
+            <Text style={s.emptyBody}>
+              Add your first task below or add issues to this board in GitHub.
+            </Text>
+          </View>
+        ) : (
+          <SectionList
+            style={s.container}
+            contentContainerStyle={s.content}
+            sections={sections}
+            keyExtractor={(item) => item.id}
+            keyboardShouldPersistTaps="handled"
+            renderSectionHeader={({ section }) => (
+              <SectionHeader title={section.title} count={section.count} theme={theme} />
+            )}
+            renderItem={({ item }) => (
+              <View style={s.taskPadding}>
+                <TaskCard
+                  task={item}
+                  theme={theme}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(app)/task/[id]',
+                      params: { id: item.id, boardId: id },
+                    })
+                  }
+                />
+              </View>
+            )}
+            refreshControl={
+              <RefreshControl
+                refreshing={isLoading}
+                onRefresh={onRefresh}
+                tintColor={theme.colors.primary}
+              />
+            }
+            stickySectionHeadersEnabled
+          />
+        )}
+
+        <QuickAddBar
+          onSubmit={handleQuickAdd}
+          theme={theme}
+          bottomInset={insets.bottom}
+        />
+      </KeyboardAvoidingView>
+      {pickerVisible && (
+        <BoardPickerModal
+          currentBoardId={id ?? ''}
+          onSelect={handleBoardSelect}
+          onClose={() => setPickerVisible(false)}
+          theme={theme}
         />
       )}
-
-      <QuickAddBar
-        onSubmit={handleQuickAdd}
-        theme={theme}
-        bottomInset={insets.bottom}
-      />
-    </KeyboardAvoidingView>
+    </>
   )
 }
+
+const headerTitleStyles = StyleSheet.create({
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  text: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+})
 
 function styles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
@@ -636,6 +1008,7 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
     content: { paddingBottom: spacing[4] },
     taskPadding: { paddingHorizontal: spacing[5], paddingTop: spacing[2] },
     centered: {
+      flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
       padding: spacing[8],
