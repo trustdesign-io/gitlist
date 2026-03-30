@@ -600,6 +600,53 @@ export async function fetchTaskDetail(pat: string, itemId: string): Promise<Task
 }
 
 // ---------------------------------------------------------------------------
+// Add draft task
+// ---------------------------------------------------------------------------
+
+const ADD_DRAFT_ITEM_MUTATION = `
+  mutation AddDraftItem($projectId: ID!, $title: String!) {
+    addProjectV2DraftItem(input: { projectId: $projectId, title: $title }) {
+      projectItem {
+        id
+        fieldValues(first: 20) {
+          nodes {
+            ... on ProjectV2ItemFieldSingleSelectValue {
+              field { ... on ProjectV2SingleSelectField { name } }
+              name
+              optionId
+            }
+          }
+        }
+        content {
+          ... on DraftIssue {
+            __typename
+            title
+          }
+        }
+      }
+    }
+  }
+`
+
+interface AddDraftItemResponse {
+  addProjectV2DraftItem: {
+    projectItem: ItemNode
+  }
+}
+
+/**
+ * Create a draft item on a ProjectV2 board via the addProjectV2DraftItem mutation.
+ * Returns the newly created task mapped to the local Task shape.
+ */
+export async function addDraftTask(pat: string, projectId: string, title: string): Promise<Task> {
+  const data = await githubGraphQL<AddDraftItemResponse>(pat, ADD_DRAFT_ITEM_MUTATION, {
+    projectId,
+    title,
+  })
+  return mapItem(data.addProjectV2DraftItem.projectItem)
+}
+
+// ---------------------------------------------------------------------------
 
 /** Execute a GraphQL query against the GitHub API using a PAT. */
 export async function githubGraphQL<T>(
