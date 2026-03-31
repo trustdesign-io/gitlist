@@ -639,6 +639,7 @@ function QuickAddBar({ onSubmit, theme, bottomInset }: QuickAddBarProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef = useRef<TextInput>(null)
   const s = useMemo(() => quickAddStyles(theme, bottomInset), [theme, bottomInset])
 
   const showError = useCallback((msg: string) => {
@@ -654,11 +655,11 @@ function QuickAddBar({ onSubmit, theme, bottomInset }: QuickAddBarProps) {
     setIsSubmitting(true)
     const submitted = trimmed
     setTitle('')
-    Keyboard.dismiss()
 
     try {
       await onSubmit(submitted)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      inputRef.current?.focus()
     } catch {
       showError('Failed to add task. Please try again.')
     } finally {
@@ -677,6 +678,7 @@ function QuickAddBar({ onSubmit, theme, bottomInset }: QuickAddBarProps) {
       )}
       <View style={s.bar}>
         <TextInput
+          ref={inputRef}
           style={s.input}
           placeholder="Add a task..."
           placeholderTextColor={theme.colors.mutedForeground}
@@ -1485,8 +1487,8 @@ export default function BoardScreen() {
       const optimisticTask: Task = {
         id: tempId,
         title,
-        status: null,
-        statusOptionId: null,
+        status: statusField?.options[0]?.name ?? null,
+        statusOptionId: statusField?.options[0]?.id ?? null,
         assignees: [],
         labels: [],
         issueNumber: null,
@@ -1512,7 +1514,7 @@ export default function BoardScreen() {
         throw err
       }
     },
-    [id, user?.id, prependTask, removeTask, replaceTask]
+    [id, user?.id, statusField, prependTask, removeTask, replaceTask]
   )
 
   const doneOption = useMemo(
