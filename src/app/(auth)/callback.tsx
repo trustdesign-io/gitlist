@@ -7,7 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext'
 /**
  * Auth callback screen — handles Supabase email confirmation and OAuth redirects.
  *
- * Deep link: starter-native://callback?code=<pkce_code>
+ * Deep link: gitlist://callback?code=<pkce_code>
  *
  * PKCE code exchange is handled here exclusively. Hash-based (implicit flow)
  * tokens are handled by AuthProvider's Linking listener, which fires before

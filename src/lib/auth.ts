@@ -1,5 +1,5 @@
-import { Linking } from 'react-native'
 import * as ExpoLinking from 'expo-linking'
+import * as WebBrowser from 'expo-web-browser'
 import { supabase } from './supabase'
 import type { ActionResult } from '@trustdesign/shared/types'
 
@@ -15,7 +15,12 @@ export async function signInWithGitHub(): Promise<ActionResult> {
   if (error) return { success: false, error: error.message }
   if (!data.url) return { success: false, error: 'Could not initiate GitHub sign-in.' }
   try {
-    await Linking.openURL(data.url)
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+    if (result.type === 'success' && result.url) {
+      // Extract tokens from the callback URL and set the session
+      const { handleAuthDeepLink } = await import('./deep-links')
+      await handleAuthDeepLink(result.url)
+    }
   } catch {
     return { success: false, error: 'Could not open browser for GitHub sign-in.' }
   }
