@@ -231,6 +231,7 @@ type ItemContent =
       assignees: { nodes: { login: string; avatarUrl: string }[] }
       labels: { nodes: { name: string; color: string }[] }
     }
+  | { __typename: 'PullRequest'; title: string; number: number; state: 'OPEN' | 'CLOSED' | 'MERGED' }
   | { __typename: 'DraftIssue'; title: string }
   | null
 
@@ -305,6 +306,12 @@ const FETCH_BOARD_ITEMS_QUERY = `
                 assignees(first: 5) { nodes { login avatarUrl } }
                 labels(first: 5) { nodes { name color } }
               }
+              ... on PullRequest {
+                __typename
+                title
+                number
+                state
+              }
               ... on DraftIssue {
                 __typename
                 title
@@ -335,16 +342,24 @@ function extractFieldValues(nodes: FieldValueNode[]): TaskFieldValue[] {
   return values
 }
 
+function resolveTitle(content: NonNullable<ItemContent>, fieldValues: TaskFieldValue[]): string {
+  const contentTitle = content.title.trim()
+  if (contentTitle) return contentTitle
+  // Fall back to the board's built-in "Title" text field (present on all item types)
+  return fieldValues.find((fv) => fv.fieldName === 'Title')?.value ?? ''
+}
+
 function mapItem(item: ItemNode): Task {
   const fieldValues = extractFieldValues(item.fieldValues.nodes)
   const statusFieldValue = fieldValues.find((fv) => fv.fieldName.toLowerCase() === 'status')
 
   const content = item.content!
+  const title = resolveTitle(content, fieldValues)
 
   if (content.__typename === 'Issue') {
     return {
       id: item.id,
-      title: content.title,
+      title,
       status: statusFieldValue?.value ?? null,
       statusOptionId: statusFieldValue?.optionId ?? null,
       assignees: content.assignees.nodes,
@@ -356,10 +371,25 @@ function mapItem(item: ItemNode): Task {
     }
   }
 
+  if (content.__typename === 'PullRequest') {
+    return {
+      id: item.id,
+      title,
+      status: statusFieldValue?.value ?? null,
+      statusOptionId: statusFieldValue?.optionId ?? null,
+      assignees: [],
+      labels: [],
+      issueNumber: content.number,
+      issueState: content.state === 'MERGED' ? 'CLOSED' : content.state,
+      isDraft: false,
+      fieldValues,
+    }
+  }
+
   // DraftIssue
   return {
     id: item.id,
-    title: content.title,
+    title,
     status: statusFieldValue?.value ?? null,
     statusOptionId: statusFieldValue?.optionId ?? null,
     assignees: [],
@@ -392,10 +422,14 @@ export async function fetchBoardItems(pat: string, projectId: string): Promise<T
 
     const page = data.node.items
     for (const item of page.nodes) {
-      // Skip orphaned items (no content) and draft items with no title
-      if (!item.content) continue
-      if (item.content.__typename === 'DraftIssue' && !item.content.title.trim()) continue
-      tasks.push(mapItem(item))
+      if (!item.content) continue  // orphaned item (no linked issue, PR, or draft)
+      const task = mapItem(item)
+      if (!task.title) {
+        // Item has content but no resolvable title — skip and log for debugging
+        console.warn('[fetchBoardItems] Skipping item with no title:', item.id, item.content.__typename)
+        continue
+      }
+      tasks.push(task)
     }
 
     hasNextPage = page.pageInfo.hasNextPage
