@@ -72,7 +72,12 @@ export default function OnboardingScreen() {
 
   return (
     <View style={s.container}>
-      <Pressable style={[s.skipButton, { top: insets.top + 16 }]} onPress={handleSkip}>
+      <Pressable
+        style={[s.skipButton, { top: insets.top + 16 }]}
+        onPress={handleSkip}
+        accessibilityRole="button"
+        accessibilityLabel="Skip onboarding"
+      >
         <Text style={s.skipText}>Skip</Text>
       </Pressable>
 
@@ -94,7 +99,12 @@ export default function OnboardingScreen() {
           ))}
         </View>
 
-        <Pressable style={s.button} onPress={handleNext}>
+        <Pressable
+          style={s.button}
+          onPress={handleNext}
+          accessibilityRole="button"
+          accessibilityLabel={currentIndex === STEPS.length - 1 ? 'Get started' : 'Next'}
+        >
           <Text style={s.buttonText}>
             {currentIndex === STEPS.length - 1 ? 'Get started' : 'Next'}
           </Text>
@@ -114,6 +124,8 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
       position: 'absolute',
       right: 24,
       zIndex: 1,
+      minHeight: 44,
+      justifyContent: 'center',
     },
     skipText: {
       fontSize: 16,

@@ -104,12 +104,14 @@ export default function SettingsScreen() {
             value={notificationsEnabled}
             onValueChange={toggleNotifications}
             trackColor={{ true: theme.colors.primary }}
+            accessibilityLabel="Push notifications"
           />
         </View>
         <Pressable
           style={s.row}
           onPress={cycleColorScheme}
           accessibilityRole="button"
+          accessibilityLabel="Appearance"
           accessibilityHint="Cycles between system, light, and dark appearance"
         >
           <Text style={s.rowLabel}>Appearance</Text>
@@ -173,6 +175,7 @@ export default function SettingsScreen() {
             )
           }
           accessibilityRole="button"
+          accessibilityLabel="Delete account"
         >
           <Text style={[s.rowLabel, s.danger]}>Delete account</Text>
         </Pressable>
