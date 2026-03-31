@@ -1401,6 +1401,7 @@ export default function BoardScreen() {
     const activeCount =
       (activeFilters.status != null ? 1 : 0) +
       (activeFilters.assignee != null ? 1 : 0) +
+      (activeFilters.label != null ? 1 : 0) +
       (searchQuery.length > 0 ? 1 : 0)
     navigation.setOptions({
       headerTitle: () => (
@@ -1881,13 +1882,17 @@ export default function BoardScreen() {
       ? availableStatuses
       : filterPickerKey === 'assignee'
         ? availableAssignees
-        : availableLabels
+        : filterPickerKey === 'label'
+          ? availableLabels
+          : []
   const pickerTitle =
     filterPickerKey === 'status'
       ? 'Filter by Status'
       : filterPickerKey === 'assignee'
         ? 'Filter by Assignee'
-        : 'Filter by Label'
+        : filterPickerKey === 'label'
+          ? 'Filter by Label'
+          : ''
 
   // ---- All Boards view ----
   if (isAllBoards) {
