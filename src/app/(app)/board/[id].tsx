@@ -1466,7 +1466,7 @@ function BoardScreenInner() {
       } else if (message.toLowerCase().includes('network') || message.toLowerCase().includes('fetch')) {
         setError('Network error. Check your connection and try again.')
       } else {
-        setError(`Failed to load tasks: ${message}`)
+        setError('Failed to load tasks. Please try again.')
       }
     }
   }, [id, user?.id, isAllBoards, setTasks, setLoading, setError, setFields])
@@ -1496,9 +1496,8 @@ function BoardScreenInner() {
           setTasks(b.id, result)
         })
       )
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      setError(`Failed to load tasks: ${message}`)
+    } catch {
+      setError('Failed to load tasks. Please try again.')
     }
   }, [isAllBoards, user?.id, boards, tasksByBoard, setTasks, setLoading, setError])
 
