@@ -179,7 +179,13 @@ function TaskCard({ task, theme, isCompleting, onPress }: TaskCardProps) {
   const dueDate = task.fieldValues.find((fv) =>
     DUE_DATE_FIELD_NAMES.includes(fv.fieldName.toLowerCase())
   )
-  const isOverdue = dueDate != null && new Date(dueDate.value) < new Date()
+  // Compute overdue using the same day-difference approach as formatDueDate
+  // to avoid timezone mismatches when comparing date-only strings to Date.now()
+  const isOverdue =
+    dueDate != null &&
+    Math.round(
+      (new Date(dueDate.value).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    ) < 0
 
   return (
     <Pressable
@@ -215,14 +221,18 @@ function TaskCard({ task, theme, isCompleting, onPress }: TaskCardProps) {
                 style={[
                   s.priorityBadge,
                   priority.color
-                    ? { backgroundColor: `#${priority.color}26` }
+                    ? { backgroundColor: `#${priority.color.replace(/^#/, '')}26` }
                     : { backgroundColor: theme.colors.muted },
                 ]}
               >
                 <Text
                   style={[
                     s.priorityLabel,
-                    { color: priority.color ? `#${priority.color}` : theme.colors.foreground },
+                    {
+                      color: priority.color
+                        ? `#${priority.color.replace(/^#/, '')}`
+                        : theme.colors.foreground,
+                    },
                   ]}
                 >
                   {priority.value}
@@ -230,7 +240,7 @@ function TaskCard({ task, theme, isCompleting, onPress }: TaskCardProps) {
               </View>
             )}
             {dueDate != null && (
-              <View style={[s.dueDateBadge, isOverdue && s.dueDateOverdue]}>
+              <View style={s.dueDateBadge}>
                 <Ionicons
                   name="calendar-outline"
                   size={11}
@@ -317,7 +327,6 @@ function taskCardStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignItems: 'center',
       gap: 3,
     },
-    dueDateOverdue: {},
     dueDateLabel: {
       fontSize: fontSize.xs.size,
       lineHeight: fontSize.xs.lineHeight,
