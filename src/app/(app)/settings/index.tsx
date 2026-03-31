@@ -1,9 +1,12 @@
-import { View, Text, StyleSheet, Switch, Pressable, Alert, Linking } from 'react-native'
-import { useState, useMemo } from 'react'
+import { View, Text, StyleSheet, Switch, Pressable, Alert, Linking, ActivityIndicator } from 'react-native'
+import { useState, useMemo, useCallback } from 'react'
 import * as Notifications from 'expo-notifications'
+import Constants from 'expo-constants'
 import { useGithubStore } from '../../../stores/github-store'
 import { useTheme } from '../../../contexts/ThemeContext'
 import type { ColorScheme } from '../../../lib/theme'
+import { restorePurchases, PRO_ENTITLEMENT_ID } from '../../../lib/purchases'
+import { useEntitlementStore } from '../../../stores/entitlement-store'
 
 const SCHEME_LABELS: Record<ColorScheme, string> = {
   system: 'System',
@@ -13,10 +16,17 @@ const SCHEME_LABELS: Record<ColorScheme, string> = {
 
 const SCHEME_OPTIONS: ColorScheme[] = ['system', 'light', 'dark']
 
+const PRIVACY_POLICY_URL = process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL ?? ''
+const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL ?? ''
+
+const APP_VERSION: string = (Constants.expoConfig?.version as string | undefined) ?? '1.0.0'
+
 export default function SettingsScreen() {
   const { theme, colorScheme, setColorScheme } = useTheme()
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(false)
   const { githubUsername } = useGithubStore()
+  const setIsPro = useEntitlementStore((state) => state.setIsPro)
 
   const s = useMemo(() => styles(theme), [theme])
 
@@ -42,6 +52,34 @@ export default function SettingsScreen() {
     const currentIndex = SCHEME_OPTIONS.indexOf(colorScheme)
     const next = SCHEME_OPTIONS[(currentIndex + 1) % SCHEME_OPTIONS.length]
     setColorScheme(next)
+  }
+
+  const handleRestorePurchases = useCallback(async () => {
+    setIsRestoring(true)
+    try {
+      const info = await restorePurchases()
+      if (info.entitlements.active[PRO_ENTITLEMENT_ID] != null) {
+        setIsPro(true)
+        Alert.alert('Purchase restored', 'Gitlist is unlocked.')
+      } else {
+        Alert.alert(
+          'Nothing to restore',
+          'No previous purchase was found for this Apple ID.'
+        )
+      }
+    } catch {
+      Alert.alert('Restore failed', 'Check your internet connection and try again.')
+    } finally {
+      setIsRestoring(false)
+    }
+  }, [setIsPro])
+
+  function openUrl(url: string, label: string) {
+    if (!url) {
+      Alert.alert(label, 'This page is not yet available.')
+      return
+    }
+    void Linking.openURL(url)
   }
 
   return (
@@ -77,19 +115,47 @@ export default function SettingsScreen() {
         </Pressable>
       </View>
 
+      <Text style={s.sectionHeader}>Purchase</Text>
+      <View style={s.section}>
+        <Pressable
+          style={s.row}
+          onPress={handleRestorePurchases}
+          disabled={isRestoring}
+          accessibilityRole="button"
+          accessibilityLabel="Restore previous purchase"
+        >
+          <Text style={s.rowLabel}>Restore purchase</Text>
+          {isRestoring ? (
+            <ActivityIndicator size="small" color={theme.colors.mutedForeground} />
+          ) : (
+            <Text style={s.chevron}>›</Text>
+          )}
+        </Pressable>
+      </View>
+
       <Text style={s.sectionHeader}>About</Text>
       <View style={s.section}>
-        <Pressable style={s.row}>
+        <Pressable
+          style={s.row}
+          onPress={() => openUrl(PRIVACY_POLICY_URL, 'Privacy policy')}
+          accessibilityRole="link"
+          accessibilityLabel="Privacy policy"
+        >
           <Text style={s.rowLabel}>Privacy policy</Text>
           <Text style={s.chevron}>›</Text>
         </Pressable>
-        <Pressable style={s.row}>
+        <Pressable
+          style={s.row}
+          onPress={() => openUrl(TERMS_URL, 'Terms of service')}
+          accessibilityRole="link"
+          accessibilityLabel="Terms of service"
+        >
           <Text style={s.rowLabel}>Terms of service</Text>
           <Text style={s.chevron}>›</Text>
         </Pressable>
         <View style={s.row}>
           <Text style={s.rowLabel}>Version</Text>
-          <Text style={s.rowValue}>1.0.0</Text>
+          <Text style={s.rowValue}>{APP_VERSION}</Text>
         </View>
       </View>
 
@@ -104,6 +170,7 @@ export default function SettingsScreen() {
               [{ text: 'OK' }]
             )
           }
+          accessibilityRole="button"
         >
           <Text style={[s.rowLabel, s.danger]}>Delete account</Text>
         </Pressable>
