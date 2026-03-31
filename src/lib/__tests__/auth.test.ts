@@ -1,95 +1,82 @@
-import { signInWithEmail, signUpWithEmail } from '../auth'
+import { signInWithGitHub, signOut } from '../auth'
 import { supabase } from '../supabase'
 
-jest.mock('../sentry', () => ({
-  sentryTrackSignUp: jest.fn(),
+jest.mock('react-native', () => ({
+  Linking: {
+    openURL: jest.fn().mockResolvedValue(undefined),
+  },
+}))
+
+jest.mock('expo-linking', () => ({
+  createURL: jest.fn().mockReturnValue('gitlist://callback'),
 }))
 
 jest.mock('../supabase', () => ({
   supabase: {
     auth: {
-      signInWithPassword: jest.fn(),
-      signUp: jest.fn(),
+      signInWithOAuth: jest.fn(),
+      signOut: jest.fn(),
     },
   },
 }))
 
 const mockAuth = supabase.auth as unknown as {
-  signInWithPassword: jest.Mock
-  signUp: jest.Mock
+  signInWithOAuth: jest.Mock
+  signOut: jest.Mock
 }
 
-describe('signInWithEmail', () => {
+describe('signInWithGitHub', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
 
-  it('returns success when credentials are valid', async () => {
-    mockAuth.signInWithPassword.mockResolvedValue({ error: null })
+  it('opens browser URL when OAuth initiation succeeds', async () => {
+    mockAuth.signInWithOAuth.mockResolvedValue({
+      data: { url: 'https://github.com/login/oauth/authorize?...' },
+      error: null,
+    })
 
-    const result = await signInWithEmail('user@example.com', 'password123')
+    const result = await signInWithGitHub()
 
     expect(result.success).toBe(true)
-    expect(mockAuth.signInWithPassword).toHaveBeenCalledWith({
-      email: 'user@example.com',
-      password: 'password123',
+    expect(mockAuth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: 'github',
+      options: {
+        redirectTo: 'gitlist://callback',
+        scopes: 'read:user read:org project',
+      },
     })
   })
 
   it('returns failure when Supabase returns an error', async () => {
-    mockAuth.signInWithPassword.mockResolvedValue({
-      error: { message: 'Invalid login credentials' },
+    mockAuth.signInWithOAuth.mockResolvedValue({
+      data: { url: null },
+      error: { message: 'OAuth provider not configured' },
     })
 
-    const result = await signInWithEmail('user@example.com', 'wrongpassword')
+    const result = await signInWithGitHub()
 
     expect(result.success).toBe(false)
-    if (!result.success) expect(result.error).toBe('Invalid email or password.')
+    if (!result.success) expect(result.error).toBe('OAuth provider not configured')
   })
 
-  it('returns validation error for invalid email', async () => {
-    const result = await signInWithEmail('not-an-email', 'password123')
+  it('returns failure when no URL is returned', async () => {
+    mockAuth.signInWithOAuth.mockResolvedValue({
+      data: { url: null },
+      error: null,
+    })
+
+    const result = await signInWithGitHub()
 
     expect(result.success).toBe(false)
-    if (!result.success) expect(typeof result.error).toBe('string')
-    expect(mockAuth.signInWithPassword).not.toHaveBeenCalled()
+    if (!result.success) expect(result.error).toBe('Could not initiate GitHub sign-in.')
   })
 })
 
-describe('signUpWithEmail', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
-
-  it('returns success when sign-up succeeds', async () => {
-    mockAuth.signUp.mockResolvedValue({ error: null })
-
-    const result = await signUpWithEmail('Alice', 'alice@example.com', 'password123')
-
-    expect(result.success).toBe(true)
-    expect(mockAuth.signUp).toHaveBeenCalledWith({
-      email: 'alice@example.com',
-      password: 'password123',
-      options: { data: { name: 'Alice' } },
-    })
-  })
-
-  it('returns failure when Supabase returns an error', async () => {
-    mockAuth.signUp.mockResolvedValue({
-      error: { message: 'User already registered' },
-    })
-
-    const result = await signUpWithEmail('Alice', 'alice@example.com', 'password123')
-
-    expect(result.success).toBe(false)
-    if (!result.success) expect(result.error).toBe('User already registered')
-  })
-
-  it('returns validation error for short password', async () => {
-    const result = await signUpWithEmail('Alice', 'alice@example.com', '123')
-
-    expect(result.success).toBe(false)
-    if (!result.success) expect(typeof result.error).toBe('string')
-    expect(mockAuth.signUp).not.toHaveBeenCalled()
+describe('signOut', () => {
+  it('calls supabase signOut', async () => {
+    mockAuth.signOut.mockResolvedValue({ error: null })
+    await signOut()
+    expect(mockAuth.signOut).toHaveBeenCalledTimes(1)
   })
 })

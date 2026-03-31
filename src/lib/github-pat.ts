@@ -1,82 +1,58 @@
 import * as SecureStore from 'expo-secure-store'
-import { supabase } from './supabase'
 import type { ActionResult } from '@trustdesign/shared/types'
 
-/**
- * SecureStore key for the cached GitHub username (not the PAT itself).
- * The PAT is fetched from Supabase via RPC (where it is stored encrypted).
- * Caching the username avoids a network call on every cold start.
- */
+const tokenKey = (userId: string) => `github_token_${userId}`
 const usernameKey = (userId: string) => `github_username_${userId}`
 
-/** Lightweight struct for boot-time state hydration. */
 export interface GithubAccountMeta {
   githubUsername: string
 }
 
 /**
- * Load the GitHub username from SecureStore (fast path) or Supabase (fallback).
- * Only returns the username — use `fetchGithubPAT` when the token is needed.
+ * Store the GitHub OAuth token and username in SecureStore.
+ * Called by AuthProvider on SIGNED_IN when provider_token is available.
  */
-export async function loadGithubAccountMeta(userId: string): Promise<GithubAccountMeta | null> {
-  // Fast path: SecureStore (no network)
-  try {
-    const cached = await SecureStore.getItemAsync(usernameKey(userId))
-    if (cached) return { githubUsername: cached }
-  } catch {
-    // SecureStore unavailable — fall through
-  }
-
-  // Fallback: Supabase (decrypts PAT via RPC, but we only need the username here)
-  const { data, error } = await supabase.rpc('get_github_pat')
-  if (error || !data || data.length === 0) return null
-
-  const row = data[0] as { github_username: string }
-  await SecureStore.setItemAsync(usernameKey(userId), row.github_username).catch(() => {})
-  return { githubUsername: row.github_username }
+export async function storeGithubToken(
+  userId: string,
+  token: string,
+  username: string
+): Promise<void> {
+  await Promise.all([
+    SecureStore.setItemAsync(tokenKey(userId), token).catch(() => {}),
+    SecureStore.setItemAsync(usernameKey(userId), username).catch(() => {}),
+  ])
 }
 
 /**
- * Fetch the decrypted PAT from Supabase.
- * Called only when a GitHub API request is about to be made.
+ * Load the GitHub username from SecureStore for display purposes.
+ */
+export async function loadGithubAccountMeta(userId: string): Promise<GithubAccountMeta | null> {
+  try {
+    const username = await SecureStore.getItemAsync(usernameKey(userId))
+    if (username) return { githubUsername: username }
+  } catch {}
+  return null
+}
+
+/**
+ * Fetch the GitHub OAuth token from SecureStore.
+ * Called before making GitHub API requests.
  */
 export async function fetchGithubPAT(userId: string): Promise<string | null> {
-  const { data, error } = await supabase.rpc('get_github_pat')
-  if (error || !data || data.length === 0) return null
-  const row = data[0] as { github_pat: string }
-
-  // Refresh the username cache while we're here
-  const usernameRow = data[0] as { github_username: string }
-  await SecureStore.setItemAsync(usernameKey(userId), usernameRow.github_username).catch(() => {})
-
-  return row.github_pat
+  try {
+    return await SecureStore.getItemAsync(tokenKey(userId))
+  } catch {
+    return null
+  }
 }
 
-/** Save a validated PAT — encrypted via Supabase RPC, username cached in SecureStore. */
-export async function saveGithubPAT(
-  userId: string,
-  pat: string,
-  githubUsername: string
-): Promise<ActionResult> {
-  const { error } = await supabase.rpc('store_github_pat', {
-    p_username: githubUsername,
-    p_pat: pat,
-  })
-
-  if (error) {
-    return { success: false, error: 'Failed to save token. Please try again.' }
-  }
-
-  await SecureStore.setItemAsync(usernameKey(userId), githubUsername).catch(() => {})
-  return { success: true }
-}
-
-/** Remove the PAT from Supabase and SecureStore. */
-export async function removeGithubPAT(userId: string): Promise<ActionResult> {
-  const { error } = await supabase.rpc('delete_github_pat')
-  if (error) {
-    return { success: false, error: 'Failed to unlink GitHub account. Please try again.' }
-  }
-  await SecureStore.deleteItemAsync(usernameKey(userId)).catch(() => {})
+/**
+ * Remove GitHub token and username from SecureStore (called on sign-out).
+ */
+export async function removeGithubToken(userId: string): Promise<ActionResult> {
+  await Promise.all([
+    SecureStore.deleteItemAsync(tokenKey(userId)).catch(() => {}),
+    SecureStore.deleteItemAsync(usernameKey(userId)).catch(() => {}),
+  ])
   return { success: true }
 }
