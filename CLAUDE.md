@@ -32,20 +32,20 @@ See also: `~/.claude/memory.md` for global workflow preferences.
 - **Auth**: Supabase via @supabase/supabase-js + AsyncStorage (GitHub OAuth — sole sign-in method)
 - **GitHub integration**: GitHub Projects v2 GraphQL API, OAuth token from Supabase auth
 - **State**: Zustand
-- **Local cache**: AsyncStorage (Expo Go compatible; will move to MMKV when switching to dev builds)
+- **Local cache**: MMKV (`react-native-mmkv`) — synchronous, fast, requires dev build
 - **Validation**: Zod (via @trustdesign/shared)
 - **Shared code**: @trustdesign/shared (types, schemas, tokens, Supabase client factory)
 - **Notifications**: expo-notifications
 - **OTA Updates**: expo-updates
 - **Deep linking**: URL scheme `gitlist://`
-- **Error monitoring**: Sentry stub (no-op) — real @sentry/react-native requires dev build
+- **Error monitoring**: Sentry (`@sentry/react-native`) — requires dev build (see ticket #62)
 - **Auth browser**: expo-web-browser (in-app Safari sheet for OAuth flow)
 
 ## Architecture
 
 ```
-Phone → Local cache (AsyncStorage) → Sync engine → GitHub GraphQL API
-                                                  → Supabase (user/billing only)
+Phone → Local cache (MMKV) → Sync engine → GitHub GraphQL API
+                                         → Supabase (user/billing only)
 ```
 
 - **GitHub owns task data** — boards, columns, items, labels, assignees
@@ -110,33 +110,24 @@ Platform-native feel — follows iOS HIG and Material Design guidelines.
 Uses system fonts, native navigation patterns, and platform-appropriate
 styling (e.g. elevation on Android, shadows on iOS).
 
-## ⛔ BANNED IMPORTS — READ THIS BEFORE WRITING ANY CODE
+## Dev build requirement
 
-These imports WILL crash the app in Expo Go. **NEVER use them:**
+Development uses Expo dev builds (not Expo Go). Build via EAS:
 
-| BANNED                                                        | USE INSTEAD                                          |
-|---------------------------------------------------------------|------------------------------------------------------|
-| `react-native-gesture-handler/ReanimatedSwipeable`            | `react-native-gesture-handler/Swipeable`             |
-| `import { type SwipeableMethods }`                            | `import Swipeable` (use `Swipeable` as the ref type) |
-| `react-native-reanimated` (v4 worklet APIs)                   | Stick to reanimated v3 (no worklets)                 |
-| `react-native-mmkv`                                           | `@react-native-async-storage/async-storage`          |
-| `@sentry/react-native`                                        | `src/lib/sentry.ts` (no-op stub)                     |
+```bash
+eas build --profile development --platform ios
+```
 
-This has been violated 3 times already. If you import `ReanimatedSwipeable`, the app
-crashes with "[Reanimated] Failed to create a worklet". CHECK YOUR IMPORTS.
+The development profile targets the iOS Simulator (`ios.simulator: true`).
+Native modules in use that require a dev build:
+- **MMKV** (`react-native-mmkv`) — synchronous storage for cache
+- **ReanimatedSwipeable** (`react-native-gesture-handler/ReanimatedSwipeable`) — swipeable task rows
+- **RevenueCat** (`react-native-purchases`) — in-app purchase
+- **Sentry** (`@sentry/react-native`) — crash reporting (ticket #62)
 
-## Expo Go compatibility
-
-Development currently uses Expo Go (no native modules). Key constraints:
-- **No MMKV** — using AsyncStorage instead (all cache functions are async)
-- **No Sentry** — `src/lib/sentry.ts` is a no-op stub
-- **react-native-reanimated v3** — v4 requires native worklets module
-- **Swipeable** (not ReanimatedSwipeable) — from `react-native-gesture-handler/Swipeable`
-- **babel.config.js** — `reanimated: false` to disable worklets babel plugin
+Other constraints:
 - **`.npmrc`** — `legacy-peer-deps=true` (required for Expo SDK 55)
 - **Xcode 16.2 + Expo SDK 55** — local `npx expo run:ios` fails; use EAS cloud builds or Xcode 26+
-
-When moving to dev builds, restore: MMKV, Sentry, reanimated v4, ReanimatedSwipeable.
 
 ## Commands
 
