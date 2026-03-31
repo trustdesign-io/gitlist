@@ -6,19 +6,19 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen
         name="profile"
-        options={{ headerShown: true, title: 'Profile', presentation: 'card' }}
+        options={{ headerShown: true, title: 'Profile', presentation: 'card', headerBackVisible: true }}
       />
       <Stack.Screen
         name="settings"
-        options={{ headerShown: true, title: 'Settings', presentation: 'card' }}
+        options={{ headerShown: true, title: 'Settings', presentation: 'card', headerBackVisible: true }}
       />
       <Stack.Screen
         name="board"
-        options={{ headerShown: true, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card', headerBackVisible: true }}
       />
       <Stack.Screen
         name="task"
-        options={{ headerShown: true, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card', headerBackVisible: true }}
       />
     </Stack>
   )
