@@ -16,7 +16,7 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { useCurrentUser } from '../../../hooks/use-current-user'
 import { fetchGithubPAT } from '../../../lib/github-pat'
 import { fetchBoardItems, fetchUserBoards, type Task } from '../../../lib/github'
-import { getCached, setCached } from '../../../lib/cache'
+import { getCached, setCached, deleteCached } from '../../../lib/cache'
 import { useBoardsStore } from '../../../stores/boards-store'
 import { Card } from '../../../components/ui/Card'
 import { EntitlementGate } from '../../../components/EntitlementGate'
@@ -196,7 +196,7 @@ function TodayScreenInner() {
 
   const s = useMemo(() => styles(theme, insets.bottom), [theme, insets.bottom])
 
-  const loadToday = useCallback(async () => {
+  const loadToday = useCallback(async (forceRefresh = false) => {
     if (!user?.id) return
     setIsLoading(true)
     setError(null)
@@ -211,8 +211,11 @@ function TodayScreenInner() {
       // `boards` array to the dependency list (would cause an infinite re-fetch
       // loop: setBoards → new boards ref → loadToday recreated → useEffect fires).
       let boardList = useBoardsStore.getState().boards
-      if (boardList.length === 0) {
-        const cached = await getCached<typeof boardList>(['boards', user.id])
+      if (boardList.length === 0 || forceRefresh) {
+        if (forceRefresh) {
+          await deleteCached(['boards', user.id])
+        }
+        const cached = forceRefresh ? null : await getCached<typeof boardList>(['boards', user.id])
         if (cached) {
           setBoards(cached)
           boardList = cached
@@ -224,11 +227,14 @@ function TodayScreenInner() {
         }
       }
 
-      // Fetch tasks for each board (use cache if fresh)
+      // Fetch tasks for each board; bypass cache on pull-to-refresh
       const nextSections: BoardSection[] = []
       await Promise.all(
         boardList.map(async (board) => {
-          let tasks = await getCached<Task[]>(['tasks', user.id, board.id])
+          if (forceRefresh) {
+            await deleteCached(['tasks', user.id, board.id])
+          }
+          let tasks = forceRefresh ? null : await getCached<Task[]>(['tasks', user.id, board.id])
           if (!tasks) {
             tasks = await fetchBoardItems(pat, board.id)
             await setCached(['tasks', user.id, board.id], tasks)
@@ -263,11 +269,11 @@ function TodayScreenInner() {
   }, [user?.id, setBoards])
 
   useEffect(() => {
-    void loadToday()
+    void loadToday(false)
   }, [loadToday])
 
   const onRefresh = useCallback(() => {
-    void loadToday()
+    void loadToday(true)
   }, [loadToday])
 
   if (isLoading && sections.length === 0) {
