@@ -110,6 +110,21 @@ Platform-native feel — follows iOS HIG and Material Design guidelines.
 Uses system fonts, native navigation patterns, and platform-appropriate
 styling (e.g. elevation on Android, shadows on iOS).
 
+## ⛔ BANNED IMPORTS — READ THIS BEFORE WRITING ANY CODE
+
+These imports WILL crash the app in Expo Go. **NEVER use them:**
+
+| BANNED                                                        | USE INSTEAD                                          |
+|---------------------------------------------------------------|------------------------------------------------------|
+| `react-native-gesture-handler/ReanimatedSwipeable`            | `react-native-gesture-handler/Swipeable`             |
+| `import { type SwipeableMethods }`                            | `import Swipeable` (use `Swipeable` as the ref type) |
+| `react-native-reanimated` (v4 worklet APIs)                   | Stick to reanimated v3 (no worklets)                 |
+| `react-native-mmkv`                                           | `@react-native-async-storage/async-storage`          |
+| `@sentry/react-native`                                        | `src/lib/sentry.ts` (no-op stub)                     |
+
+This has been violated 3 times already. If you import `ReanimatedSwipeable`, the app
+crashes with "[Reanimated] Failed to create a worklet". CHECK YOUR IMPORTS.
+
 ## Expo Go compatibility
 
 Development currently uses Expo Go (no native modules). Key constraints:
