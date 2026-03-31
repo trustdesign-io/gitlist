@@ -33,6 +33,7 @@ import { updateFieldValue, type FieldMapping, type FieldOption } from '../../../
 import { useTasksStore } from '../../../stores/tasks-store'
 import { useFieldsStore } from '../../../stores/fields-store'
 import { Avatar } from '../../../components/ui/Avatar'
+import { captureEvent } from '../../../lib/analytics'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -651,6 +652,7 @@ export default function TaskDetailScreen() {
       const result = await fetchTaskDetail(pat, id)
       setDetail(result)
       navigation.setOptions({ title: result.title })
+      captureEvent('task_opened', { is_draft: result.isDraft })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       if (message.includes('401') || message.toLowerCase().includes('expired')) {
@@ -750,6 +752,7 @@ export default function TaskDetailScreen() {
       updateTask(boardId, id, { status: optionName, statusOptionId: optionId })
       // Haptic fires on user action, not after the API resolves
       void Haptics.selectionAsync()
+      captureEvent('task_status_changed')
 
       // Fire API in background — do NOT await here so EditFieldModal closes immediately
       void (async () => {

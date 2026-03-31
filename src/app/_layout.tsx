@@ -12,12 +12,15 @@ import { useEntitlementCheck } from '../hooks/useEntitlementCheck'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { initPurchases } from '../lib/purchases'
 import { initSentry } from '../lib/sentry'
+import { initAnalytics } from '../lib/analytics'
+import { useScreenTracking } from '../hooks/useScreenTracking'
 
 SplashScreen.preventAutoHideAsync()
 
 // Initialise native SDKs as early as possible (requires dev build).
 initSentry()
 initPurchases()
+initAnalytics()
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuthStore()
@@ -25,6 +28,7 @@ function RootLayoutNav() {
   const router = useRouter()
   useOTAUpdates()
   useEntitlementCheck()
+  useScreenTracking()
 
   useEffect(() => {
     if (isLoading) return

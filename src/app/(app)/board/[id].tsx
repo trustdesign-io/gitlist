@@ -51,6 +51,7 @@ import {
 } from '../../../lib/task-filters'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Card } from '../../../components/ui/Card'
+import { captureEvent } from '../../../lib/analytics'
 import { EntitlementGate } from '../../../components/EntitlementGate'
 
 const ALL_BOARDS_ID = 'all'
@@ -1457,6 +1458,7 @@ function BoardScreenInner() {
       await setCached(['tasks', user.id, id], result)
       setTasks(id, result)
       setFields(id, fields)
+      captureEvent('board_opened', { item_count: result.length })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       if (message.includes('401') || message.toLowerCase().includes('expired')) {
