@@ -1,8 +1,8 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { Linking } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { handleAuthDeepLink } from '../lib/deep-links'
-import { storeGithubToken, loadGithubAccountMeta } from '../lib/github-pat'
+import { storeGithubToken, loadGithubAccountMeta, removeGithubToken } from '../lib/github-pat'
 import { useAuthStore } from '../stores/auth-store'
 import { useGithubStore } from '../stores/github-store'
 import { sentryIdentifyUser, sentryClearUser } from '../lib/sentry'
@@ -15,6 +15,9 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const setUser = useAuthStore((state) => state.setUser)
   const { setGithubAccount } = useGithubStore()
+  // Track the current user ID so we can clean up SecureStore on sign-out,
+  // when the session (and user ID) is no longer available.
+  const userIdRef = useRef<string | null>(null)
 
   const loadGithubAccount = useCallback(
     async (userId: string) => {
@@ -32,6 +35,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Check current session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        userIdRef.current = session.user.id
         const user: User = {
           id: session.user.id,
           email: session.user.email ?? '',
@@ -80,6 +84,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (session?.user) {
+          userIdRef.current = session.user.id
           const user: User = {
             id: session.user.id,
             email: session.user.email ?? '',
@@ -94,26 +99,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
             updatedAt: new Date(),
           }
           setUser(user)
+
           if (event === 'SIGNED_IN') {
             sentryIdentifyUser(session.user.id, session.user.email ?? '')
-            if (session.provider_token) {
-              // GitHub OAuth: store the access token and username from session
-              const username =
-                session.user.user_metadata?.user_name ??
-                session.user.user_metadata?.login ??
-                ''
-              storeGithubToken(session.user.id, session.provider_token, username).catch(() => {})
-              setGithubAccount(username || null)
-            } else {
-              loadGithubAccount(session.user.id).catch(() => {})
-            }
+          }
+
+          // Store GitHub token on sign-in and whenever Supabase refreshes the
+          // session — provider_token may be rotated on TOKEN_REFRESHED.
+          if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session.provider_token) {
+            const username =
+              session.user.user_metadata?.user_name ??
+              session.user.user_metadata?.login ??
+              ''
+            storeGithubToken(session.user.id, session.provider_token, username).catch((err) => {
+              console.warn('[AuthProvider] Failed to store GitHub token:', err)
+            })
+            setGithubAccount(username || null)
+          } else if (event === 'SIGNED_IN') {
+            // Fallback: load username from SecureStore if no provider_token
+            loadGithubAccount(session.user.id).catch(() => {})
           }
         } else {
-          setUser(null)
           if (event === 'SIGNED_OUT') {
             sentryClearUser()
             setGithubAccount(null)
+            // Clean up the stored token for the user who just signed out
+            if (userIdRef.current) {
+              removeGithubToken(userIdRef.current).catch((err) => {
+                console.warn('[AuthProvider] Failed to remove GitHub token on sign-out:', err)
+              })
+              userIdRef.current = null
+            }
           }
+          setUser(null)
         }
       }
     )
