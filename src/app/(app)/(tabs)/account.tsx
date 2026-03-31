@@ -29,17 +29,17 @@ export default function AccountScreen() {
         <Text style={s.email}>{user?.email ?? ''}</Text>
       </View>
       <View style={s.menu}>
-        <Pressable style={s.menuItem} onPress={() => router.push('/(app)/profile')} accessibilityRole="button">
+        <Pressable style={s.menuItem} onPress={() => router.push('/(app)/profile')} accessibilityRole="button" accessibilityLabel="Edit profile">
           <Text style={s.menuItemText}>Edit profile</Text>
           <Text style={s.menuItemChevron}>\u203a</Text>
         </Pressable>
         <Divider />
-        <Pressable style={s.menuItem} onPress={() => router.push('/(app)/settings')} accessibilityRole="button">
+        <Pressable style={s.menuItem} onPress={() => router.push('/(app)/settings')} accessibilityRole="button" accessibilityLabel="Settings">
           <Text style={s.menuItemText}>Settings</Text>
           <Text style={s.menuItemChevron}>\u203a</Text>
         </Pressable>
         <Divider />
-        <Pressable style={s.menuItem} onPress={handleSignOut} accessibilityRole="button">
+        <Pressable style={s.menuItem} onPress={handleSignOut} accessibilityRole="button" accessibilityLabel="Sign out">
           <Text style={[s.menuItemText, s.signOut]}>Sign out</Text>
         </Pressable>
       </View>
