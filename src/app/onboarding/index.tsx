@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, Dimensions, FlatList } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuthStore } from '../../stores/auth-store'
 import { useTheme } from '../../contexts/ThemeContext'
 
@@ -40,6 +41,7 @@ export default function OnboardingScreen() {
   const router = useRouter()
   const { user, setUser } = useAuthStore()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const s = useMemo(() => styles(theme), [theme])
 
   function handleNext() {
@@ -70,7 +72,7 @@ export default function OnboardingScreen() {
 
   return (
     <View style={s.container}>
-      <Pressable style={s.skipButton} onPress={handleSkip}>
+      <Pressable style={[s.skipButton, { top: insets.top + 16 }]} onPress={handleSkip}>
         <Text style={s.skipText}>Skip</Text>
       </Pressable>
 
@@ -85,7 +87,7 @@ export default function OnboardingScreen() {
         contentOffset={{ x: currentIndex * width, y: 0 }}
       />
 
-      <View style={s.footer}>
+      <View style={[s.footer, { paddingBottom: Math.max(48, insets.bottom + 16) }]}>
         <View style={s.dots}>
           {STEPS.map((_, index) => (
             <View key={index} style={[s.dot, index === currentIndex && s.dotActive]} />
@@ -110,7 +112,6 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     skipButton: {
       position: 'absolute',
-      top: 60,
       right: 24,
       zIndex: 1,
     },
@@ -144,7 +145,6 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     footer: {
       paddingHorizontal: 24,
-      paddingBottom: 48,
       alignItems: 'center',
     },
     dots: {
