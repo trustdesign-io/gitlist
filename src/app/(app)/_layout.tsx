@@ -20,6 +20,10 @@ export default function AppLayout() {
         name="task"
         options={{ headerShown: true, presentation: 'card', headerBackVisible: true }}
       />
+      <Stack.Screen
+        name="paywall"
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
     </Stack>
   )
 }
