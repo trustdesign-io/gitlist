@@ -41,9 +41,9 @@ Swipe to mark tasks done or delete them. Pull to refresh. Works offline with cac
 
 ## Keywords (100 chars max)
 
-> github,projects,issues,tasks,boards,productivity,developer,pull request,agile,kanban
+> github,projects,issues,tasks,boards,productivity,developer,pull request,agile,kanban,todo
 
-_(88 characters)_
+_(92 characters)_
 
 ---
 

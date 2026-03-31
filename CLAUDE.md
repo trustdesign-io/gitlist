@@ -64,16 +64,19 @@ app/                    # Expo Router file-based routes
 ├── (app)/              # Authenticated screens
 │   ├── (tabs)/         # Bottom tab navigation
 │   │   ├── index.tsx   # Boards list
+│   │   ├── today.tsx   # Today tab — tasks due today across all boards
 │   │   └── account.tsx # Account tab
-│   ├── board/          # Board detail → task list
-│   ├── task/           # Task detail view
-│   └── settings/       # App settings, PAT management
-└── onboarding/         # First-run: sign up → link GitHub PAT
+│   ├── board/          # Board detail → task list (swipe to complete/delete)
+│   ├── task/           # Task detail view (prev/next navigation)
+│   ├── paywall/        # In-app purchase paywall (full-screen modal)
+│   ├── profile/        # Edit profile
+│   └── settings/       # App settings (notifications, appearance, IAP)
+└── onboarding/         # First-run flow
 src/
-├── components/         # Reusable components (AuthProvider, ErrorBoundary)
-├── hooks/              # Custom hooks (useCurrentUser)
-├── lib/                # Supabase client, GitHub GraphQL client, auth, notifications
-├── stores/             # Zustand stores (auth-store, boards-store, tasks-store)
+├── components/         # Reusable components (AuthProvider, ErrorBoundary, EntitlementGate)
+├── hooks/              # Custom hooks (useCurrentUser, useEntitlementCheck)
+├── lib/                # Supabase, GitHub, auth, cache (MMKV), purchases, Sentry
+├── stores/             # Zustand stores (auth-store, boards-store, entitlement-store)
 └── types/              # Type re-exports from shared package
 ```
 
