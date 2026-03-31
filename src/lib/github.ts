@@ -407,6 +407,9 @@ export async function fetchBoardItems(pat: string, projectId: string): Promise<T
 
     const page = data.node.items
     for (const item of page.nodes) {
+      // Skip orphaned items (no content) and draft items with no title
+      if (!item.content) continue
+      if (item.content.__typename === 'DraftIssue' && !item.content.title.trim()) continue
       tasks.push(mapItem(item))
     }
 
