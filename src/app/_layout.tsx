@@ -8,6 +8,7 @@ import { EnvironmentBadge } from '../components/EnvironmentBadge'
 import { useAuthStore } from '../stores/auth-store'
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext'
 import { useOTAUpdates } from '../hooks/useOTAUpdates'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -55,13 +56,15 @@ function RootLayoutNav() {
 
 function RootLayout() {
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <RootLayoutNav />
-        </AuthProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <AuthProvider>
+            <RootLayoutNav />
+          </AuthProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   )
 }
 

@@ -2,31 +2,54 @@
 
 A native to-do list app backed by GitHub Project boards (Projects v2 GraphQL API).
 
+## WORKFLOW RULES — READ FIRST
+
+**NEVER implement features directly.** All feature work goes through tickets.
+
+When Danny asks for tickets or mentions work that needs doing:
+1. Write each ticket as a **plain-text block** with: Title, Category, Priority, Size, and Body (with `## Overview` and `## Acceptance Criteria` sections)
+2. Danny copies each ticket into the **Claude Code CLI** which runs `/create-ticket`
+3. The CLI creates the GitHub issue on Mission Control with correct labels and board fields
+4. The CLI then picks up the ticket and does the implementation
+
+**Do NOT:**
+- Run `gh issue create` or create tickets programmatically
+- Start coding features, fixing bugs, or making changes to app code
+- Implement anything yourself — always write it as a ticket for the CLI
+
+**Cowork's role:** planning, writing tickets, updating docs/context files, and reviewing.
+**CLI's role:** implementation, PRs, code changes.
+
+See also: `~/.claude/memory.md` for global workflow preferences.
+
+---
+
 ## Tech stack
 
 - **Framework**: Expo SDK 55 + React Native 0.83
 - **Navigation**: Expo Router (file-based, tab bar + stack)
 - **Language**: TypeScript (strict, typed routes)
-- **Auth**: Supabase via @supabase/supabase-js + AsyncStorage (user accounts & billing)
-- **GitHub integration**: GitHub Projects v2 GraphQL API, PAT-based auth (v1)
+- **Auth**: Supabase via @supabase/supabase-js + AsyncStorage (GitHub OAuth — sole sign-in method)
+- **GitHub integration**: GitHub Projects v2 GraphQL API, OAuth token from Supabase auth
 - **State**: Zustand
-- **Local cache**: MMKV for offline task data
+- **Local cache**: AsyncStorage (Expo Go compatible; will move to MMKV when switching to dev builds)
 - **Validation**: Zod (via @trustdesign/shared)
 - **Shared code**: @trustdesign/shared (types, schemas, tokens, Supabase client factory)
 - **Notifications**: expo-notifications
 - **OTA Updates**: expo-updates
 - **Deep linking**: URL scheme `gitlist://`
-- **Error monitoring**: @sentry/react-native (optional — disabled when `EXPO_PUBLIC_SENTRY_DSN` is unset)
+- **Error monitoring**: Sentry stub (no-op) — real @sentry/react-native requires dev build
+- **Auth browser**: expo-web-browser (in-app Safari sheet for OAuth flow)
 
 ## Architecture
 
 ```
-Phone → Local cache (MMKV) → Sync engine → GitHub GraphQL API
-                                         → Supabase (user/billing only)
+Phone → Local cache (AsyncStorage) → Sync engine → GitHub GraphQL API
+                                                  → Supabase (user/billing only)
 ```
 
 - **GitHub owns task data** — boards, columns, items, labels, assignees
-- **Supabase owns user data** — accounts, PAT storage, billing/subscriptions
+- **Supabase owns user data** — accounts, OAuth tokens (via SecureStore), billing/subscriptions
 - Multi-board support from v1
 
 ## Project structure
@@ -58,14 +81,18 @@ src/
 
 1. Root layout checks `useAuthStore` for user state
 2. No user → redirect to `(auth)/sign-in`
-3. User without GitHub PAT → redirect to PAT linking screen
-4. Authenticated user with PAT → `(app)/(tabs)` (boards list)
+3. User signs in via GitHub OAuth (sole auth method — email auth disabled in Supabase)
+4. `auth.ts` uses `WebBrowser.openAuthSessionAsync` for in-app Safari OAuth sheet
+5. On callback, `deep-links.ts` extracts `access_token`, `refresh_token`, and `provider_token` from hash
+6. `provider_token` (GitHub OAuth token) stored in SecureStore via `storeGithubToken`
+7. Authenticated user → onboarding (if first time) → `(app)/(tabs)` (boards list)
 
-## GitHub PAT linking
+## GitHub OAuth
 
-Users provide a GitHub Personal Access Token with `project` scope.
-The PAT is stored securely in Supabase (encrypted) and used to query
-the GitHub Projects v2 GraphQL API on behalf of the user.
+GitHub is the sole sign-in method. The OAuth App is owned by the trustdesign-io org.
+The GitHub OAuth token (provider_token) is captured during sign-in and stored in
+expo-secure-store. This token is used for all GitHub Projects v2 GraphQL API calls.
+Scopes: `read:user read:org project`.
 
 ## Shared package
 
@@ -82,6 +109,19 @@ AsyncStorage for React Native session persistence.
 Platform-native feel — follows iOS HIG and Material Design guidelines.
 Uses system fonts, native navigation patterns, and platform-appropriate
 styling (e.g. elevation on Android, shadows on iOS).
+
+## Expo Go compatibility
+
+Development currently uses Expo Go (no native modules). Key constraints:
+- **No MMKV** — using AsyncStorage instead (all cache functions are async)
+- **No Sentry** — `src/lib/sentry.ts` is a no-op stub
+- **react-native-reanimated v3** — v4 requires native worklets module
+- **Swipeable** (not ReanimatedSwipeable) — from `react-native-gesture-handler/Swipeable`
+- **babel.config.js** — `reanimated: false` to disable worklets babel plugin
+- **`.npmrc`** — `legacy-peer-deps=true` (required for Expo SDK 55)
+- **Xcode 16.2 + Expo SDK 55** — local `npx expo run:ios` fails; use EAS cloud builds or Xcode 26+
+
+When moving to dev builds, restore: MMKV, Sentry, reanimated v4, ReanimatedSwipeable.
 
 ## Commands
 
@@ -164,3 +204,5 @@ eas update --channel production --message "Fix: sign-in crash on iOS 17"
 `/create-ticket` command from trustdesign-setup. It applies the correct
 label, adds the issue to Mission Control, and sets Priority, Size, and
 Category fields on the board.
+
+**Never implement features directly.** See WORKFLOW RULES at the top of this file.
