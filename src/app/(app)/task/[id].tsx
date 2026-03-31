@@ -547,12 +547,20 @@ export default function TaskDetailScreen() {
   const navigation = useNavigation()
 
   const tasksByBoard = useTasksStore((state) => state.tasksByBoard)
+  const updateTask = useTasksStore((state) => state.updateTask)
   const fieldsByBoard = useFieldsStore((state) => state.fieldsByBoard)
 
   const [detail, setDetail] = useState<TaskDetail | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeFieldMapping, setActiveFieldMapping] = useState<FieldMapping | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!statusError) return
+    const t = setTimeout(() => setStatusError(null), 3000)
+    return () => clearTimeout(t)
+  }, [statusError])
 
   // Task-to-task navigation
   const orderedTaskIds = useMemo<string[]>(() => {
@@ -581,6 +589,7 @@ export default function TaskDetailScreen() {
   )
 
   const fieldMappings = boardId ? (fieldsByBoard[boardId] ?? []) : []
+  const statusFieldMapping = fieldMappings.find((m) => m.isStatus) ?? null
 
   // Try to bootstrap from store first (avoids a network call if board was already loaded)
   const cachedTask = useMemo(() => {
@@ -663,6 +672,60 @@ export default function TaskDetailScreen() {
     [id, boardId, user?.id]
   )
 
+  // Optimistic status change — updates UI immediately, API fires in background, reverts on error.
+  const handleStatusChange = useCallback(
+    async (optionName: string, optionId?: string): Promise<void> => {
+      if (!id || !boardId || !user?.id || !statusFieldMapping || !detail) return
+
+      const prevStatus = detail.status
+      const prevStatusRaw = detail.rawFields.find(
+        (f) => f.fieldName.toLowerCase() === 'status'
+      ) ?? null
+
+      // Optimistic: update status in local state immediately
+      setDetail((prev) => {
+        if (!prev) return prev
+        const exists = prev.rawFields.some((f) => f.fieldName.toLowerCase() === 'status')
+        const updatedRaw = exists
+          ? prev.rawFields.map((f) =>
+              f.fieldName.toLowerCase() === 'status'
+                ? { ...f, value: optionName, optionId: optionId ?? null }
+                : f
+            )
+          : [...prev.rawFields, { fieldName: 'Status', value: optionName, optionId: optionId ?? null }]
+        return { ...prev, status: optionName, rawFields: updatedRaw }
+      })
+      // Keep the board list in sync
+      updateTask(boardId, id, { status: optionName, statusOptionId: optionId ?? null })
+
+      // Fire API in background — do NOT await here so the modal closes immediately
+      void (async () => {
+        try {
+          const pat = await fetchGithubPAT(user.id)
+          if (!pat) throw new Error('No token')
+          await updateFieldValue(pat, boardId, id, statusFieldMapping.field.id, {
+            singleSelectOptionId: optionId ?? '',
+          })
+          await Haptics.selectionAsync()
+        } catch {
+          // Revert on failure
+          setDetail((prev) => {
+            if (!prev) return prev
+            const reverted = prevStatusRaw
+              ? prev.rawFields.map((f) =>
+                  f.fieldName.toLowerCase() === 'status' ? prevStatusRaw : f
+                )
+              : prev.rawFields.filter((f) => f.fieldName.toLowerCase() !== 'status')
+            return { ...prev, status: prevStatus, rawFields: reverted }
+          })
+          updateTask(boardId, id, { status: prevStatus, statusOptionId: prevStatusRaw?.optionId ?? null })
+          setStatusError('Failed to update status. Please try again.')
+        }
+      })()
+    },
+    [id, boardId, user?.id, statusFieldMapping, detail, updateTask]
+  )
+
   const s = useMemo(
     () => styles(theme, insets.bottom, orderedTaskIds.length > 1 && currentIndex >= 0),
     [theme, insets.bottom, orderedTaskIds.length, currentIndex]
@@ -722,7 +785,20 @@ export default function TaskDetailScreen() {
 
         {/* Status + draft badge */}
         <View style={s.badgeRow}>
-          {detail.status != null && <StatusBadge status={detail.status} />}
+          {detail.status != null && (
+            statusFieldMapping != null ? (
+              <Pressable
+                onPress={() => setActiveFieldMapping(statusFieldMapping)}
+                accessibilityRole="button"
+                accessibilityLabel={`Status: ${detail.status}. Tap to change.`}
+                accessibilityHint="Opens a picker to change the task status"
+              >
+                <StatusBadge status={detail.status} />
+              </Pressable>
+            ) : (
+              <StatusBadge status={detail.status} />
+            )
+          )}
           {detail.isDraft && (
             <View style={s.draftBadge}>
               <Text style={s.draftLabel}>Draft</Text>
@@ -825,11 +901,23 @@ export default function TaskDetailScreen() {
             (f) => f.fieldName.toLowerCase() === activeFieldMapping.field.name.toLowerCase()
           )}
           onConfirm={async (value, optionId) => {
-            await handleFieldChange(activeFieldMapping, value, optionId)
+            if (activeFieldMapping.isStatus) {
+              await handleStatusChange(value, optionId)
+            } else {
+              await handleFieldChange(activeFieldMapping, value, optionId)
+            }
           }}
           onClose={() => setActiveFieldMapping(null)}
           theme={theme}
         />
+      )}
+
+      {/* Status error toast */}
+      {statusError != null && (
+        <View style={s.errorToast} accessibilityLiveRegion="polite">
+          <Ionicons name="alert-circle" size={16} color={colors.surface.background} />
+          <Text style={s.errorToastText}>{statusError}</Text>
+        </View>
       )}
 
       {/* Task-to-task navigation bar — only shown when task is within the ordered list */}
@@ -1034,6 +1122,25 @@ function styles(
       lineHeight: fontSize.sm.lineHeight,
       color: theme.colors.mutedForeground,
       fontWeight: '500',
+    },
+    errorToast: {
+      position: 'absolute',
+      bottom: (hasTaskNav ? NAV_BAR_HEIGHT + bottomInset + spacing[3] : bottomInset + spacing[5]),
+      left: spacing[5],
+      right: spacing[5],
+      backgroundColor: theme.colors.error,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[3],
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+    },
+    errorToastText: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: colors.surface.background,
+      flex: 1,
     },
   })
 }
