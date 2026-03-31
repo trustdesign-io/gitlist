@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { useCurrentUser } from '../../../hooks/use-current-user'
 import { Card } from '../../../components/ui/Card'
@@ -156,9 +157,10 @@ function skeletonStyles(theme: ReturnType<typeof useTheme>['theme']) {
 export default function BoardsScreen() {
   const user = useCurrentUser()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { boards, isLoading, error, setBoards, setLoading, setError } = useBoardsStore()
-  const s = useMemo(() => styles(theme), [theme])
+  const s = useMemo(() => styles(theme, insets.bottom), [theme, insets.bottom])
   const didRedirect = useRef(false)
 
   const loadBoards = useCallback(async () => {
@@ -308,10 +310,10 @@ export default function BoardsScreen() {
   )
 }
 
-function styles(theme: ReturnType<typeof useTheme>['theme']) {
+function styles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.muted },
-    content: { padding: spacing[5] },
+    content: { padding: spacing[5], paddingBottom: bottomInset + spacing[5] },
     centered: { justifyContent: 'center', alignItems: 'center', padding: spacing[8] },
     emptyContainer: { flex: 1, padding: spacing[5] },
     emptyInner: {

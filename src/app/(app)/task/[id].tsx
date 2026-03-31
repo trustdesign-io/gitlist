@@ -537,6 +537,7 @@ function fieldRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
 export default function TaskDetailScreen() {
   const { id, boardId } = useLocalSearchParams<{ id: string; boardId?: string }>()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const user = useCurrentUser()
   const router = useRouter()
   const navigation = useNavigation()
@@ -632,7 +633,7 @@ export default function TaskDetailScreen() {
     [id, boardId, user?.id]
   )
 
-  const s = useMemo(() => styles(theme), [theme])
+  const s = useMemo(() => styles(theme, insets.bottom), [theme, insets.bottom])
   const markdownStyles = useMemo(() => buildMarkdownStyles(theme), [theme])
 
   if (isLoading && !detail) {
@@ -801,7 +802,7 @@ export default function TaskDetailScreen() {
   )
 }
 
-function styles(theme: ReturnType<typeof useTheme>['theme']) {
+function styles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -809,7 +810,7 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     content: {
       padding: spacing[5],
-      paddingBottom: spacing[10],
+      paddingBottom: bottomInset + spacing[8],
     },
     centered: {
       justifyContent: 'center',
