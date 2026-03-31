@@ -19,6 +19,7 @@ import {
   restorePurchases,
   PRO_ENTITLEMENT_ID,
 } from '../../../lib/purchases'
+import { captureEvent } from '../../../lib/analytics'
 
 // ---------------------------------------------------------------------------
 // Feature list
@@ -68,10 +69,12 @@ export default function PaywallScreen() {
 
   const handlePurchase = useCallback(async () => {
     if (state.kind !== 'ready' || !state.pkg) return
+    captureEvent('purchase_started')
     setState({ kind: 'purchasing' })
     try {
       const info = await purchasePackage(state.pkg)
       if (info.entitlements.active[PRO_ENTITLEMENT_ID] != null) {
+        captureEvent('purchase_completed')
         setState({ kind: 'success' })
         // Give the user a moment to see the confirmation before dismissing
         setTimeout(() => {
