@@ -16,7 +16,7 @@ import {
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import Swipeable from 'react-native-gesture-handler/Swipeable'
+import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -433,7 +433,7 @@ function SwipeableRow({
   onComplete,
   onDelete,
 }: SwipeableRowProps) {
-  const swipeableRef = useRef<Swipeable | null>(null)
+  const swipeableRef = useRef<SwipeableMethods | null>(null)
 
   const handleSwipeOpen = useCallback(
     (direction: 'left' | 'right') => {
@@ -449,7 +449,7 @@ function SwipeableRow({
 
   return (
     <View style={rowStyles.padding}>
-      <Swipeable
+      <ReanimatedSwipeable
         ref={swipeableRef}
         renderLeftActions={canComplete ? () => <CompleteAction /> : undefined}
         renderRightActions={() => <DeleteAction />}
@@ -461,7 +461,7 @@ function SwipeableRow({
         overshootRight={false}
       >
         <TaskCard task={task} theme={theme} isCompleting={isCompleting} onPress={onPress} />
-      </Swipeable>
+      </ReanimatedSwipeable>
     </View>
   )
 }
