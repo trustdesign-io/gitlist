@@ -16,7 +16,7 @@ import {
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable'
+import Swipeable from 'react-native-gesture-handler/Swipeable'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -55,6 +55,8 @@ const ALL_BOARDS_ID = 'all'
 const MAX_ITEMS_PER_BOARD = 50
 // Height of the search + filter header — used to scroll past it on initial render
 const SEARCH_HEADER_HEIGHT = 116
+// Base height of the QuickAddBar (paddingTop + input + paddingBottom, before bottom inset)
+const QUICK_ADD_BAR_BASE_HEIGHT = spacing[3] + 40 + spacing[3]
 
 // ---------------------------------------------------------------------------
 // Skeleton
@@ -431,7 +433,7 @@ function SwipeableRow({
   onComplete,
   onDelete,
 }: SwipeableRowProps) {
-  const swipeableRef = useRef<SwipeableMethods | null>(null)
+  const swipeableRef = useRef<Swipeable | null>(null)
 
   const handleSwipeOpen = useCallback(
     (direction: 'left' | 'right') => {
@@ -447,7 +449,7 @@ function SwipeableRow({
 
   return (
     <View style={rowStyles.padding}>
-      <ReanimatedSwipeable
+      <Swipeable
         ref={swipeableRef}
         renderLeftActions={canComplete ? () => <CompleteAction /> : undefined}
         renderRightActions={() => <DeleteAction />}
@@ -459,7 +461,7 @@ function SwipeableRow({
         overshootRight={false}
       >
         <TaskCard task={task} theme={theme} isCompleting={isCompleting} onPress={onPress} />
-      </ReanimatedSwipeable>
+      </Swipeable>
     </View>
   )
 }
@@ -1244,10 +1246,11 @@ interface UndoToastProps {
   label: string
   onUndo: () => void
   theme: ReturnType<typeof useTheme>['theme']
+  bottomOffset: number
 }
 
-function UndoToast({ visible, label, onUndo, theme }: UndoToastProps) {
-  const s = useMemo(() => undoToastStyles(theme), [theme])
+function UndoToast({ visible, label, onUndo, theme, bottomOffset }: UndoToastProps) {
+  const s = useMemo(() => undoToastStyles(theme, bottomOffset), [theme, bottomOffset])
   if (!visible) return null
   return (
     <View style={s.overlay} pointerEvents="box-none">
@@ -1269,11 +1272,11 @@ function UndoToast({ visible, label, onUndo, theme }: UndoToastProps) {
   )
 }
 
-function undoToastStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function undoToastStyles(theme: ReturnType<typeof useTheme>['theme'], bottomOffset: number) {
   return StyleSheet.create({
     overlay: {
       position: 'absolute',
-      bottom: spacing[8],
+      bottom: bottomOffset,
       left: spacing[5],
       right: spacing[5],
       alignItems: 'center',
@@ -2030,7 +2033,7 @@ export default function BoardScreen() {
       <KeyboardAvoidingView
         style={s.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
       >
         {tasks !== null && tasks.length === 0 ? (
           <View style={[s.container, s.centered]}>
@@ -2106,6 +2109,7 @@ export default function BoardScreen() {
         label={undoToastLabel}
         onUndo={handleUndo}
         theme={theme}
+        bottomOffset={QUICK_ADD_BAR_BASE_HEIGHT + insets.bottom + spacing[2]}
       />
       <FilterPickerModal
         visible={filterPickerKey != null}
