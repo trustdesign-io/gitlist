@@ -380,7 +380,7 @@ function mapItem(item: ItemNode): Task {
       assignees: [],
       labels: [],
       issueNumber: content.number,
-      issueState: content.state === 'MERGED' ? 'CLOSED' : content.state,
+      issueState: content.state === 'MERGED' ? 'CLOSED' : content.state, // Task.issueState only allows OPEN|CLOSED
       isDraft: false,
       fieldValues,
     }
@@ -424,11 +424,7 @@ export async function fetchBoardItems(pat: string, projectId: string): Promise<T
     for (const item of page.nodes) {
       if (!item.content) continue  // orphaned item (no linked issue, PR, or draft)
       const task = mapItem(item)
-      if (!task.title) {
-        // Item has content but no resolvable title — skip and log for debugging
-        console.warn('[fetchBoardItems] Skipping item with no title:', item.id, item.content.__typename)
-        continue
-      }
+      if (!task.title) continue  // content present but no resolvable title — skip
       tasks.push(task)
     }
 
