@@ -42,8 +42,8 @@ Or use the npm script:
 npm run eas:preview
 ```
 
-The preview profile uses `distribution: "internal"` — EAS will sign the build
-with an Ad Hoc provisioning profile for device distribution.
+The preview profile uses `distribution: "store"` — EAS will sign the build
+with the App Store distribution certificate, making it eligible for TestFlight upload.
 
 Build progress: https://expo.dev/accounts/designtechnologist/projects/gitlist/builds
 
