@@ -1913,6 +1913,10 @@ function BoardScreenInner() {
           contentContainerStyle={s.content}
           sections={allBoardsSections}
           keyExtractor={(item) => item.id}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          removeClippedSubviews
+          initialNumToRender={15}
           renderSectionHeader={({ section }) => (
             <SectionHeader title={section.title} count={section.count} theme={theme} />
           )}
@@ -2059,6 +2063,10 @@ function BoardScreenInner() {
             contentContainerStyle={s.content}
             sections={sections}
             keyExtractor={(item) => item.id}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            removeClippedSubviews
+            initialNumToRender={15}
             keyboardShouldPersistTaps="handled"
             ListHeaderComponent={searchFilterHeader}
             renderSectionHeader={({ section }) => (
