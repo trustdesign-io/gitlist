@@ -42,6 +42,47 @@ import { Avatar } from '../../../components/ui/Avatar'
 const EXCLUDED_FIELD_NAMES = new Set(['title', 'status', 'assignees', 'labels'])
 
 // ---------------------------------------------------------------------------
+// Loading skeleton
+// ---------------------------------------------------------------------------
+
+function TaskDetailSkeleton({ theme }: { theme: ReturnType<typeof useTheme>['theme'] }) {
+  const s = useMemo(() => skeletonStyles(theme), [theme])
+  return (
+    <View style={s.container}>
+      {/* Title */}
+      <View style={[s.shimmer, s.title]} />
+      <View style={[s.shimmer, s.titleShort]} />
+      {/* Status badge */}
+      <View style={[s.shimmer, s.badge]} />
+      {/* Section */}
+      <View style={[s.shimmer, s.sectionLabel]} />
+      <View style={[s.shimmer, s.fieldRow]} />
+      <View style={[s.shimmer, s.fieldRow]} />
+      <View style={[s.shimmer, s.fieldRow]} />
+      {/* Meta */}
+      <View style={s.metaRow}>
+        <View style={[s.shimmer, s.meta]} />
+        <View style={[s.shimmer, s.meta]} />
+      </View>
+    </View>
+  )
+}
+
+function skeletonStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background, padding: spacing[5] },
+    shimmer: { backgroundColor: theme.colors.muted, borderRadius: 6 },
+    title: { height: 28, width: '90%', marginBottom: spacing[2] },
+    titleShort: { height: 28, width: '60%', marginBottom: spacing[4] },
+    badge: { height: 24, width: 80, borderRadius: 99, marginBottom: spacing[6] },
+    sectionLabel: { height: 12, width: '25%', marginBottom: spacing[3] },
+    fieldRow: { height: 44, marginBottom: spacing[2], borderRadius: 8 },
+    metaRow: { flexDirection: 'row', gap: spacing[4], marginTop: spacing[4] },
+    meta: { height: 14, width: 100 },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Label chip
 // ---------------------------------------------------------------------------
 
@@ -617,7 +658,7 @@ export default function TaskDetailScreen() {
       } else if (message.toLowerCase().includes('not found')) {
         setError('This task could not be found.')
       } else {
-        setError(`Failed to load task: ${message}`)
+        setError('Failed to load task. Please try again.')
       }
     } finally {
       setIsLoading(false)
@@ -744,11 +785,7 @@ export default function TaskDetailScreen() {
   const markdownStyles = useMemo(() => buildMarkdownStyles(theme), [theme])
 
   if (isLoading && !detail) {
-    return (
-      <View style={[s.container, s.centered]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    )
+    return <TaskDetailSkeleton theme={theme} />
   }
 
   if (error && !detail) {
@@ -759,11 +796,23 @@ export default function TaskDetailScreen() {
         <Text style={s.errorBody}>{error}</Text>
         <Pressable
           style={s.actionButton}
+          onPress={() => void loadDetail()}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+        >
+          {isLoading ? (
+            <ActivityIndicator color={colors.surface.background} size="small" />
+          ) : (
+            <Text style={s.actionButtonLabel}>Try again</Text>
+          )}
+        </Pressable>
+        <Pressable
+          style={s.backLink}
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Text style={s.actionButtonLabel}>Go back</Text>
+          <Text style={s.backLinkLabel}>Go back</Text>
         </Pressable>
       </View>
     )
@@ -1097,6 +1146,19 @@ function styles(
       lineHeight: fontSize.base.lineHeight,
       fontWeight: '600',
       color: colors.surface.background,
+    },
+    backLink: {
+      marginTop: spacing[3],
+      paddingVertical: spacing[2],
+      paddingHorizontal: spacing[4],
+      minHeight: 44,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    backLinkLabel: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
     },
     navBar: {
       flexDirection: 'row',
