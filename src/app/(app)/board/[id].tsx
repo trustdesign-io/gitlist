@@ -759,6 +759,7 @@ interface BoardPickerModalProps {
 interface PickerBoardItem {
   id: string
   title: string
+  itemCount?: number
   isAllBoards?: boolean
 }
 
@@ -769,7 +770,7 @@ function BoardPickerModal({ currentBoardId, onSelect, onClose, theme }: BoardPic
 
   const items: PickerBoardItem[] = [
     { id: ALL_BOARDS_ID, title: 'All boards', isAllBoards: true },
-    ...boards.map((b) => ({ id: b.id, title: b.title })),
+    ...boards.map((b) => ({ id: b.id, title: b.title, itemCount: b.itemCount })),
   ]
 
   return (
@@ -825,6 +826,9 @@ function BoardPickerModal({ currentBoardId, onSelect, onClose, theme }: BoardPic
                 <Text style={[s.boardName, isSelected && s.boardNameSelected]}>
                   {item.title}
                 </Text>
+                {item.itemCount != null && (
+                  <Text style={s.boardCount}>{item.itemCount}</Text>
+                )}
                 {isSelected && (
                   <Ionicons name="checkmark" size={18} color={theme.colors.primary} />
                 )}
@@ -906,6 +910,12 @@ function boardPickerStyles(theme: ReturnType<typeof useTheme>['theme']) {
     boardNameSelected: {
       color: theme.colors.primary,
       fontWeight: '600',
+    },
+    boardCount: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+      marginRight: spacing[2],
     },
   })
 }
