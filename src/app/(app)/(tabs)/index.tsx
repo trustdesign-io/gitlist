@@ -315,7 +315,7 @@ function styles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number
     container: { flex: 1, backgroundColor: theme.colors.muted },
     content: { padding: spacing[5], paddingBottom: bottomInset + spacing[5] },
     centered: { justifyContent: 'center', alignItems: 'center', padding: spacing[8] },
-    emptyContainer: { flex: 1, padding: spacing[5] },
+    emptyContainer: { flex: 1, padding: spacing[5], paddingBottom: bottomInset + spacing[5] },
     emptyInner: {
       flex: 1,
       justifyContent: 'center',
