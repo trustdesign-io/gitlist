@@ -6,57 +6,41 @@ import { AuthProvider } from '../components/AuthProvider'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { EnvironmentBadge } from '../components/EnvironmentBadge'
 import { useAuthStore } from '../stores/auth-store'
-import { useGithubStore } from '../stores/github-store'
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext'
 import { useOTAUpdates } from '../hooks/useOTAUpdates'
-import { initSentry, Sentry } from '../lib/sentry'
 
 SplashScreen.preventAutoHideAsync()
-// Called at module evaluation time so Sentry is ready before any component renders
-initSentry()
 
 function RootLayoutNav() {
-  const { user, isLoading: authLoading } = useAuthStore()
-  const { isPatLinked, isLoading: githubLoading } = useGithubStore()
+  const { user, isLoading } = useAuthStore()
   const segments = useSegments()
   const router = useRouter()
   useOTAUpdates()
 
   useEffect(() => {
-    // Wait for both auth and GitHub state to resolve
-    if (authLoading || githubLoading) return
+    if (isLoading) return
 
     const inAuthGroup = segments[0] === '(auth)'
     const inOnboarding = segments[0] === 'onboarding'
-    const segs = segments as string[]
-    const inLinkGithub = segs[0] === '(app)' && segs[1] === 'link-github'
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/sign-in')
     } else if (user && inAuthGroup) {
       if (!user.onboardingCompletedAt) {
         router.replace('/onboarding')
-      } else if (!isPatLinked) {
-        router.replace('/(app)/link-github')
       } else {
         router.replace('/(app)/(tabs)')
       }
     } else if (user && inOnboarding && user.onboardingCompletedAt) {
-      if (!isPatLinked) {
-        router.replace('/(app)/link-github')
-      } else {
-        router.replace('/(app)/(tabs)')
-      }
-    } else if (user && user.onboardingCompletedAt && !isPatLinked && !inLinkGithub) {
-      router.replace('/(app)/link-github')
+      router.replace('/(app)/(tabs)')
     }
-  }, [user, authLoading, isPatLinked, githubLoading, segments, router])
+  }, [user, isLoading, segments, router])
 
   useEffect(() => {
-    if (!authLoading) {
+    if (!isLoading) {
       SplashScreen.hideAsync()
     }
-  }, [authLoading])
+  }, [isLoading])
 
   const { theme } = useTheme()
 
@@ -81,6 +65,4 @@ function RootLayout() {
   )
 }
 
-// Sentry.wrap instruments the root component for native crash reporting
-// and unhandled promise rejection tracking
-export default Sentry.wrap(RootLayout)
+export default RootLayout

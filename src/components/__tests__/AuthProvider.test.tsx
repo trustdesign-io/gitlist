@@ -10,6 +10,11 @@ jest.mock('../../lib/sentry', () => ({
   sentryClearUser: jest.fn(),
 }))
 
+jest.mock('../../lib/github-pat', () => ({
+  storeGithubToken: jest.fn().mockResolvedValue(undefined),
+  loadGithubAccountMeta: jest.fn().mockResolvedValue(null),
+}))
+
 // Mock supabase before any imports resolve
 jest.mock('../../lib/supabase', () => ({
   supabase: {

@@ -5,10 +5,6 @@ export default function AppLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen
-        name="link-github"
-        options={{ headerShown: true, title: 'Link GitHub', presentation: 'card' }}
-      />
-      <Stack.Screen
         name="profile"
         options={{ headerShown: true, title: 'Profile', presentation: 'card' }}
       />
