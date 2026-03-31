@@ -55,8 +55,6 @@ const ALL_BOARDS_ID = 'all'
 const MAX_ITEMS_PER_BOARD = 50
 // Height of the search + filter header — used to scroll past it on initial render
 const SEARCH_HEADER_HEIGHT = 116
-// Base height of the QuickAddBar (paddingTop + input + paddingBottom, before bottom inset)
-const QUICK_ADD_BAR_BASE_HEIGHT = spacing[3] + 40 + spacing[3]
 
 // ---------------------------------------------------------------------------
 // Skeleton
@@ -2109,7 +2107,9 @@ export default function BoardScreen() {
         label={undoToastLabel}
         onUndo={handleUndo}
         theme={theme}
-        bottomOffset={QUICK_ADD_BAR_BASE_HEIGHT + insets.bottom + spacing[2]}
+        // QuickAddBar height = paddingTop(12) + input(40) + paddingBottom(12 + insets.bottom)
+        // Toast sits spacing[2] above that
+        bottomOffset={spacing[3] + 40 + spacing[3] + insets.bottom + spacing[2]}
       />
       <FilterPickerModal
         visible={filterPickerKey != null}
