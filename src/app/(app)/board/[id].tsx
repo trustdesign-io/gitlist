@@ -594,6 +594,7 @@ interface SearchFilterHeaderProps {
   activeFilters: ActiveFilters
   availableStatuses: string[]
   availableAssignees: string[]
+  availableLabels: string[]
   onFilterChipPress: (key: FilterKey) => void
   onClearAll: () => void
   theme: ReturnType<typeof useTheme>['theme']
@@ -605,6 +606,7 @@ function SearchFilterHeader({
   activeFilters,
   availableStatuses,
   availableAssignees,
+  availableLabels,
   onFilterChipPress,
   onClearAll,
   theme,
@@ -644,6 +646,14 @@ function SearchFilterHeader({
             label="Assignee"
             value={activeFilters.assignee}
             onPress={() => onFilterChipPress('assignee')}
+            theme={theme}
+          />
+        )}
+        {availableLabels.length > 0 && (
+          <FilterChip
+            label="Label"
+            value={activeFilters.label}
+            onPress={() => onFilterChipPress('label')}
             theme={theme}
           />
         )}
@@ -1806,6 +1816,15 @@ export default function BoardScreen() {
     return [...seen]
   }, [tasks])
 
+  const availableLabels = useMemo(() => {
+    if (!tasks) return []
+    const seen = new Set<string>()
+    for (const task of tasks) {
+      for (const l of task.labels) seen.add(l.name)
+    }
+    return [...seen]
+  }, [tasks])
+
   // Apply search + filters to produce the visible task list
   const filteredColumns: BoardColumn[] = useMemo(() => {
     if (!tasks) return []
@@ -1813,6 +1832,7 @@ export default function BoardScreen() {
     const q = searchQuery.toLowerCase().trim()
     const statusFilter = activeFilters.status
     const assigneeFilter = activeFilters.assignee
+    const labelFilter = activeFilters.label
 
     let filtered = tasks
     if (q) {
@@ -1824,6 +1844,11 @@ export default function BoardScreen() {
     if (assigneeFilter != null) {
       filtered = filtered.filter((task) =>
         task.assignees.some((a) => a.login === assigneeFilter)
+      )
+    }
+    if (labelFilter != null) {
+      filtered = filtered.filter((task) =>
+        task.labels.some((l) => l.name === labelFilter)
       )
     }
 
@@ -1852,9 +1877,17 @@ export default function BoardScreen() {
 
   const isFiltering = searchQuery.length > 0 || Object.values(activeFilters).some((v) => v != null)
   const pickerOptions =
-    filterPickerKey === 'status' ? availableStatuses : availableAssignees
+    filterPickerKey === 'status'
+      ? availableStatuses
+      : filterPickerKey === 'assignee'
+        ? availableAssignees
+        : availableLabels
   const pickerTitle =
-    filterPickerKey === 'status' ? 'Filter by Status' : 'Filter by Assignee'
+    filterPickerKey === 'status'
+      ? 'Filter by Status'
+      : filterPickerKey === 'assignee'
+        ? 'Filter by Assignee'
+        : 'Filter by Label'
 
   // ---- All Boards view ----
   if (isAllBoards) {
@@ -1980,6 +2013,7 @@ export default function BoardScreen() {
       activeFilters={activeFilters}
       availableStatuses={availableStatuses}
       availableAssignees={availableAssignees}
+      availableLabels={availableLabels}
       onFilterChipPress={handleFilterChipPress}
       onClearAll={handleClearAll}
       theme={theme}
