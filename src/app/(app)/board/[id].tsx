@@ -49,6 +49,7 @@ import {
 } from '../../../lib/task-filters'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Card } from '../../../components/ui/Card'
+import { EntitlementGate } from '../../../components/EntitlementGate'
 
 const ALL_BOARDS_ID = 'all'
 const MAX_ITEMS_PER_BOARD = 50
@@ -1337,7 +1338,7 @@ type PendingUndo =
 // Main screen
 // ---------------------------------------------------------------------------
 
-export default function BoardScreen() {
+function BoardScreenInner() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { theme } = useTheme()
   const user = useCurrentUser()
@@ -2226,4 +2227,12 @@ function styles(theme: ReturnType<typeof useTheme>['theme']) {
       color: colors.surface.background,
     },
   })
+}
+
+export default function BoardScreen() {
+  return (
+    <EntitlementGate>
+      <BoardScreenInner />
+    </EntitlementGate>
+  )
 }
