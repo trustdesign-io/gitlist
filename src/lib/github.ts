@@ -339,22 +339,7 @@ function mapItem(item: ItemNode): Task {
   const fieldValues = extractFieldValues(item.fieldValues.nodes)
   const statusFieldValue = fieldValues.find((fv) => fv.fieldName.toLowerCase() === 'status')
 
-  const content = item.content
-
-  if (!content) {
-    return {
-      id: item.id,
-      title: '(No title)',
-      status: statusFieldValue?.value ?? null,
-      statusOptionId: statusFieldValue?.optionId ?? null,
-      assignees: [],
-      labels: [],
-      issueNumber: null,
-      issueState: null,
-      isDraft: true,
-      fieldValues,
-    }
-  }
+  const content = item.content!
 
   if (content.__typename === 'Issue') {
     return {
