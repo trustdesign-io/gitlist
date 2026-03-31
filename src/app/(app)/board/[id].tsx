@@ -12,12 +12,11 @@ import {
   TextInput,
   Modal,
   FlatList,
-  Alert,
   TouchableOpacity,
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import Swipeable from 'react-native-gesture-handler/Swipeable'
+import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -331,31 +330,15 @@ function SwipeableRow({
   onComplete,
   onDelete,
 }: SwipeableRowProps) {
-  const swipeableRef = useRef<Swipeable | null>(null)
+  const swipeableRef = useRef<SwipeableMethods | null>(null)
 
   const handleSwipeOpen = useCallback(
     (direction: 'left' | 'right') => {
+      swipeableRef.current?.close()
       if (direction === 'left') {
-        swipeableRef.current?.close()
         onComplete(task)
       } else {
-        const truncated =
-          task.title.length > 50 ? task.title.slice(0, 47) + '...' : task.title
-        Alert.alert('Remove from board', `Remove "${truncated}"?`, [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => swipeableRef.current?.close(),
-          },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: () => {
-              swipeableRef.current?.close()
-              onDelete(task)
-            },
-          },
-        ])
+        onDelete(task)
       }
     },
     [task, onComplete, onDelete]
@@ -363,7 +346,7 @@ function SwipeableRow({
 
   return (
     <View style={rowStyles.padding}>
-      <Swipeable
+      <ReanimatedSwipeable
         ref={swipeableRef}
         renderLeftActions={canComplete ? () => <CompleteAction /> : undefined}
         renderRightActions={() => <DeleteAction />}
@@ -375,7 +358,7 @@ function SwipeableRow({
         overshootRight={false}
       >
         <TaskCard task={task} theme={theme} isCompleting={isCompleting} onPress={onPress} />
-      </Swipeable>
+      </ReanimatedSwipeable>
     </View>
   )
 }
