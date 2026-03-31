@@ -339,22 +339,7 @@ function mapItem(item: ItemNode): Task {
   const fieldValues = extractFieldValues(item.fieldValues.nodes)
   const statusFieldValue = fieldValues.find((fv) => fv.fieldName.toLowerCase() === 'status')
 
-  const content = item.content
-
-  if (!content) {
-    return {
-      id: item.id,
-      title: '(No title)',
-      status: statusFieldValue?.value ?? null,
-      statusOptionId: statusFieldValue?.optionId ?? null,
-      assignees: [],
-      labels: [],
-      issueNumber: null,
-      issueState: null,
-      isDraft: true,
-      fieldValues,
-    }
-  }
+  const content = item.content!
 
   if (content.__typename === 'Issue') {
     return {
@@ -407,6 +392,9 @@ export async function fetchBoardItems(pat: string, projectId: string): Promise<T
 
     const page = data.node.items
     for (const item of page.nodes) {
+      // Skip orphaned items (no content) and draft items with no title
+      if (!item.content) continue
+      if (item.content.__typename === 'DraftIssue' && !item.content.title.trim()) continue
       tasks.push(mapItem(item))
     }
 
