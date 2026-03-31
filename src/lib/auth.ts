@@ -1,6 +1,7 @@
 import * as ExpoLinking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
 import { supabase } from './supabase'
+import { clearUserCache } from './cache'
 import type { ActionResult } from '@trustdesign/shared/types'
 
 export async function signInWithGitHub(): Promise<ActionResult> {
@@ -28,5 +29,11 @@ export async function signInWithGitHub(): Promise<ActionResult> {
 }
 
 export async function signOut(): Promise<void> {
+  // Clear cached boards and tasks before signing out so the next user
+  // doesn't see stale data from the previous session.
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user?.id) {
+    await clearUserCache(user.id)
+  }
   await supabase.auth.signOut()
 }
