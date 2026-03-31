@@ -570,9 +570,14 @@ export default function TaskDetailScreen() {
 
   const navigateToTask = useCallback(
     (targetId: string) => {
-      router.setParams({ id: targetId })
+      // router.replace swaps the current screen in the stack so back still returns to the board,
+      // and ensures useLocalSearchParams updates reliably (more predictable than setParams).
+      router.replace({
+        pathname: '/(app)/task/[id]',
+        params: { id: targetId, boardId, taskIds },
+      })
     },
-    [router]
+    [router, boardId, taskIds]
   )
 
   const fieldMappings = boardId ? (fieldsByBoard[boardId] ?? []) : []
@@ -659,8 +664,8 @@ export default function TaskDetailScreen() {
   )
 
   const s = useMemo(
-    () => styles(theme, insets.bottom, orderedTaskIds.length > 1),
-    [theme, insets.bottom, orderedTaskIds.length]
+    () => styles(theme, insets.bottom, orderedTaskIds.length > 1 && currentIndex >= 0),
+    [theme, insets.bottom, orderedTaskIds.length, currentIndex]
   )
   const markdownStyles = useMemo(() => buildMarkdownStyles(theme), [theme])
 
@@ -827,8 +832,8 @@ export default function TaskDetailScreen() {
         />
       )}
 
-      {/* Task-to-task navigation bar */}
-      {orderedTaskIds.length > 1 && (
+      {/* Task-to-task navigation bar — only shown when task is within the ordered list */}
+      {orderedTaskIds.length > 1 && currentIndex >= 0 && (
         <View style={[s.navBar, { paddingBottom: insets.bottom + spacing[2] }]}>
           <Pressable
             style={[s.navButton, !hasPrev && s.navButtonDisabled]}
