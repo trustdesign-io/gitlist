@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, Switch, Pressable, Alert, Linking, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, Switch, Pressable, Alert, Linking, ActivityIndicator, ScrollView } from 'react-native'
 import { useState, useMemo, useCallback } from 'react'
 import * as Notifications from 'expo-notifications'
 import Constants from 'expo-constants'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useGithubStore } from '../../../stores/github-store'
 import { useTheme } from '../../../contexts/ThemeContext'
 import type { ColorScheme } from '../../../lib/theme'
@@ -27,6 +28,7 @@ export default function SettingsScreen() {
   const [isRestoring, setIsRestoring] = useState(false)
   const { githubUsername } = useGithubStore()
   const setIsPro = useEntitlementStore((state) => state.setIsPro)
+  const insets = useSafeAreaInsets()
 
   const s = useMemo(() => styles(theme), [theme])
 
@@ -83,7 +85,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <View style={s.container}>
+    <ScrollView style={s.container} contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}>
       <Text style={s.sectionHeader}>GitHub</Text>
       <View style={s.section}>
         <View style={s.row}>
@@ -175,7 +177,7 @@ export default function SettingsScreen() {
           <Text style={[s.rowLabel, s.danger]}>Delete account</Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   )
 }
 

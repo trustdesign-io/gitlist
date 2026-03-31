@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { View, Text, StyleSheet, Alert } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { signInWithGitHub } from '../../lib/auth'
 import { Button } from '../../components/ui/Button'
@@ -9,6 +10,7 @@ import { useTheme } from '../../contexts/ThemeContext'
 export default function SignInScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const s = useMemo(() => styles(theme), [theme])
 
   async function handleSignIn() {
@@ -21,7 +23,7 @@ export default function SignInScreen() {
   }
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={s.content}>
         <View style={s.logoContainer}>
           <Ionicons name="git-branch-outline" size={64} color={theme.colors.primary} />

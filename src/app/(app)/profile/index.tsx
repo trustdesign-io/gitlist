@@ -1,4 +1,4 @@
-import { View, StyleSheet, Alert } from 'react-native'
+import { View, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
 import { useState, useMemo } from 'react'
 import { useCurrentUser } from '../../../hooks/use-current-user'
 import { supabase } from '../../../lib/supabase'
@@ -30,19 +30,30 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={s.container}>
-      <View style={s.form}>
-        <TextInput label="Name" value={name} onChangeText={setName} placeholder="Your name" />
-        <TextInput label="Email" value={user?.email ?? ''} editable={false} />
-      </View>
-      <Button onPress={handleSave} loading={isSaving} style={s.saveButton}>Save changes</Button>
-    </View>
+    <KeyboardAvoidingView
+      style={s.keyboardView}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        style={s.container}
+        contentContainerStyle={s.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={s.form}>
+          <TextInput label="Name" value={name} onChangeText={setName} placeholder="Your name" />
+          <TextInput label="Email" value={user?.email ?? ''} editable={false} />
+        </View>
+        <Button onPress={handleSave} loading={isSaving} style={s.saveButton}>Save changes</Button>
+      </ScrollView>
+    </KeyboardAvoidingView>
   )
 }
 
 function styles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.muted, padding: spacing[6] },
+    keyboardView: { flex: 1, backgroundColor: theme.colors.muted },
+    container: { flex: 1 },
+    contentContainer: { padding: spacing[6] },
     form: { gap: spacing[4] },
     saveButton: { marginTop: spacing[8] },
   })
