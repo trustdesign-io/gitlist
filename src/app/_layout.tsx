@@ -11,10 +11,12 @@ import { useOTAUpdates } from '../hooks/useOTAUpdates'
 import { useEntitlementCheck } from '../hooks/useEntitlementCheck'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { initPurchases } from '../lib/purchases'
+import { initSentry } from '../lib/sentry'
 
 SplashScreen.preventAutoHideAsync()
 
-// Initialise RevenueCat SDK as early as possible (requires dev build).
+// Initialise native SDKs as early as possible (requires dev build).
+initSentry()
 initPurchases()
 
 function RootLayoutNav() {
