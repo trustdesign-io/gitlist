@@ -47,13 +47,16 @@ Updated to add:
 ```tsx
 maxToRenderPerBatch={10}
 windowSize={10}
-removeClippedSubviews
 initialNumToRender={15}
 ```
 
 - `keyExtractor` was already set: `(item) => item.id`
 - `getItemLayout` is not applicable — task cards have variable heights
   (title wrapping, field count differences).
+- `removeClippedSubviews` is intentionally **omitted** — it can clip
+  `ReanimatedSwipeable` action buttons (rendered outside the row bounds)
+  when rows are near the viewport edge, causing invisible swipe actions.
+  React Native also documents known bugs with this prop on iOS.
 
 ### ✅ Today view (`(tabs)/today.tsx` — SectionList)
 
