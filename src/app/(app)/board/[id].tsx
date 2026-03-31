@@ -1467,12 +1467,9 @@ export default function BoardScreen() {
     (boardId: string) => {
       setPickerVisible(false)
       if (boardId === id) return
-      if (user?.id && boardId !== ALL_BOARDS_ID) {
-        void setLastBoardId(user.id, boardId)
-      }
       router.replace({ pathname: '/(app)/board/[id]', params: { id: boardId } })
     },
-    [id, user?.id, router]
+    [id, router]
   )
 
   const handleQuickAdd = useCallback(
