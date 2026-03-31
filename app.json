@@ -62,7 +62,8 @@
           "imageWidth": 200
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@sentry/react-native"
     ],
     "updates": {
       "url": "https://u.expo.dev/285003f0-7bb7-49dc-9cd9-d676ee46b3f9",
