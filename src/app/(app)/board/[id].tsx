@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
   TextInput,
   Modal,
   FlatList,
@@ -1244,10 +1243,11 @@ interface UndoToastProps {
   label: string
   onUndo: () => void
   theme: ReturnType<typeof useTheme>['theme']
+  bottomOffset: number
 }
 
-function UndoToast({ visible, label, onUndo, theme }: UndoToastProps) {
-  const s = useMemo(() => undoToastStyles(theme), [theme])
+function UndoToast({ visible, label, onUndo, theme, bottomOffset }: UndoToastProps) {
+  const s = useMemo(() => undoToastStyles(theme, bottomOffset), [theme, bottomOffset])
   if (!visible) return null
   return (
     <View style={s.overlay} pointerEvents="box-none">
@@ -1269,11 +1269,11 @@ function UndoToast({ visible, label, onUndo, theme }: UndoToastProps) {
   )
 }
 
-function undoToastStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function undoToastStyles(theme: ReturnType<typeof useTheme>['theme'], bottomOffset: number) {
   return StyleSheet.create({
     overlay: {
       position: 'absolute',
-      bottom: spacing[8],
+      bottom: bottomOffset,
       left: spacing[5],
       right: spacing[5],
       alignItems: 'center',
@@ -2030,7 +2030,7 @@ export default function BoardScreen() {
       <KeyboardAvoidingView
         style={s.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
       >
         {tasks !== null && tasks.length === 0 ? (
           <View style={[s.container, s.centered]}>
@@ -2106,6 +2106,9 @@ export default function BoardScreen() {
         label={undoToastLabel}
         onUndo={handleUndo}
         theme={theme}
+        // QuickAddBar height = paddingTop(12) + input(40) + paddingBottom(12 + insets.bottom)
+        // Toast sits spacing[2] above that
+        bottomOffset={spacing[3] + 40 + spacing[3] + insets.bottom + spacing[2]}
       />
       <FilterPickerModal
         visible={filterPickerKey != null}
