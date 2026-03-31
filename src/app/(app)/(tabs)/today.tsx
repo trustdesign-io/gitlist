@@ -19,6 +19,7 @@ import { fetchBoardItems, fetchUserBoards, type Task } from '../../../lib/github
 import { getCached, setCached } from '../../../lib/cache'
 import { useBoardsStore } from '../../../stores/boards-store'
 import { Card } from '../../../components/ui/Card'
+import { EntitlementGate } from '../../../components/EntitlementGate'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -181,7 +182,7 @@ interface BoardSection {
   data: Task[]
 }
 
-export default function TodayScreen() {
+function TodayScreenInner() {
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
   const router = useRouter()
@@ -432,4 +433,12 @@ function styles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number
       color: colors.surface.background,
     },
   })
+}
+
+export default function TodayScreen() {
+  return (
+    <EntitlementGate>
+      <TodayScreenInner />
+    </EntitlementGate>
+  )
 }

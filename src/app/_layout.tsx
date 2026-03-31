@@ -8,6 +8,7 @@ import { EnvironmentBadge } from '../components/EnvironmentBadge'
 import { useAuthStore } from '../stores/auth-store'
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext'
 import { useOTAUpdates } from '../hooks/useOTAUpdates'
+import { useEntitlementCheck } from '../hooks/useEntitlementCheck'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { initPurchases } from '../lib/purchases'
 
@@ -21,6 +22,7 @@ function RootLayoutNav() {
   const segments = useSegments()
   const router = useRouter()
   useOTAUpdates()
+  useEntitlementCheck()
 
   useEffect(() => {
     if (isLoading) return
