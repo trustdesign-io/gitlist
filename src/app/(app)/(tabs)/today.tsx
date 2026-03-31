@@ -15,10 +15,9 @@ import { colors, fontSize, spacing, borderRadius } from '@trustdesign/shared/tok
 import { useTheme } from '../../../contexts/ThemeContext'
 import { useCurrentUser } from '../../../hooks/use-current-user'
 import { fetchGithubPAT } from '../../../lib/github-pat'
-import { fetchBoardItems, type Task } from '../../../lib/github'
+import { fetchBoardItems, fetchUserBoards, type Task } from '../../../lib/github'
 import { getCached, setCached } from '../../../lib/cache'
 import { useBoardsStore } from '../../../stores/boards-store'
-import { fetchUserBoards } from '../../../lib/github'
 import { Card } from '../../../components/ui/Card'
 
 // ---------------------------------------------------------------------------
@@ -28,13 +27,18 @@ import { Card } from '../../../components/ui/Card'
 const DUE_DATE_FIELD_NAMES = new Set(['due date', 'due', 'deadline'])
 
 function isToday(isoOrYmd: string): boolean {
+  // Parse YYYY-MM-DD by splitting the string to avoid UTC-vs-local mismatch.
+  // new Date("2026-03-31") is midnight UTC, so .getDate() returns the wrong
+  // day for users in UTC- timezones (e.g. US, Canada).
+  const parts = isoOrYmd.split('-')
+  if (parts.length < 3) return false
+  const [y, m, d] = parts.map(Number)
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return false
   const today = new Date()
-  const d = new Date(isoOrYmd)
-  if (isNaN(d.getTime())) return false
   return (
-    d.getFullYear() === today.getFullYear() &&
-    d.getMonth() === today.getMonth() &&
-    d.getDate() === today.getDate()
+    y === today.getFullYear() &&
+    m - 1 === today.getMonth() &&
+    d === today.getDate()
   )
 }
 
@@ -106,7 +110,7 @@ function TodayTaskCard({ task, theme, onPress }: TodayTaskCardProps) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={task.title}
+      accessibilityLabel={`Open task: ${task.title}${task.issueNumber != null ? `, issue #${task.issueNumber}` : ''}${task.status != null ? `, status: ${task.status}` : ''}`}
     >
       <Card style={s.card}>
         <View style={s.row}>
@@ -183,7 +187,7 @@ export default function TodayScreen() {
   const router = useRouter()
   const user = useCurrentUser()
 
-  const { boards, setBoards } = useBoardsStore()
+  const setBoards = useBoardsStore((state) => state.setBoards)
 
   const [sections, setSections] = useState<BoardSection[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -202,10 +206,12 @@ export default function TodayScreen() {
         return
       }
 
-      // Ensure boards are loaded
-      let boardList = boards
+      // Read boards from store state directly to avoid adding the reactive
+      // `boards` array to the dependency list (would cause an infinite re-fetch
+      // loop: setBoards → new boards ref → loadToday recreated → useEffect fires).
+      let boardList = useBoardsStore.getState().boards
       if (boardList.length === 0) {
-        const cached = await getCached<typeof boards>(['boards', user.id])
+        const cached = await getCached<typeof boardList>(['boards', user.id])
         if (cached) {
           setBoards(cached)
           boardList = cached
@@ -253,7 +259,7 @@ export default function TodayScreen() {
     } finally {
       setIsLoading(false)
     }
-  }, [user?.id, boards, setBoards])
+  }, [user?.id, setBoards])
 
   useEffect(() => {
     void loadToday()
