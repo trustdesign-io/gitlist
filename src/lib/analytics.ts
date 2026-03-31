@@ -10,7 +10,12 @@ let client: PostHog | null = null
  */
 export function initAnalytics(): void {
   if (__DEV__ || !apiKey) return
-  client = new PostHog(apiKey, { host: 'https://us.i.posthog.com' })
+  try {
+    client = new PostHog(apiKey, { host: 'https://us.i.posthog.com' })
+  } catch {
+    // Defensive: any unexpected SDK init failure must not crash the app
+    // before error boundaries are mounted.
+  }
 }
 
 /**
