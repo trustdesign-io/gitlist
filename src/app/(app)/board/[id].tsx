@@ -639,7 +639,7 @@ function QuickAddBar({ onSubmit, theme, bottomInset }: QuickAddBarProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const inputRef = useRef<import('react-native').TextInput>(null)
+  const inputRef = useRef<TextInput>(null)
   const s = useMemo(() => quickAddStyles(theme, bottomInset), [theme, bottomInset])
 
   const showError = useCallback((msg: string) => {
@@ -655,7 +655,6 @@ function QuickAddBar({ onSubmit, theme, bottomInset }: QuickAddBarProps) {
     setIsSubmitting(true)
     const submitted = trimmed
     setTitle('')
-    Keyboard.dismiss()
 
     try {
       await onSubmit(submitted)
