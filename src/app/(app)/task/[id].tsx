@@ -673,40 +673,51 @@ export default function TaskDetailScreen() {
   )
 
   // Optimistic status change — updates UI immediately, API fires in background, reverts on error.
+  // This function intentionally never throws: it returns a resolved promise so EditFieldModal
+  // closes right away without showing a spinner. All error handling is via the statusError toast.
+  // NOTE: `detail` is a dep so prevStatus is always fresh at call time. The stale-closure
+  // risk is negligible because no background refresh runs while the modal is open.
   const handleStatusChange = useCallback(
     async (optionName: string, optionId?: string): Promise<void> => {
       if (!id || !boardId || !user?.id || !statusFieldMapping || !detail) return
+      // A valid optionId is required for the single-select mutation.
+      // Without it we would send an empty string to the GitHub API, which is malformed.
+      if (!optionId) {
+        setStatusError('Failed to update status. Please try again.')
+        return
+      }
 
       const prevStatus = detail.status
       const prevStatusRaw = detail.rawFields.find(
         (f) => f.fieldName.toLowerCase() === 'status'
       ) ?? null
 
-      // Optimistic: update status in local state immediately
+      // Optimistic: update status in local state immediately so the badge reflects the tap
       setDetail((prev) => {
         if (!prev) return prev
         const exists = prev.rawFields.some((f) => f.fieldName.toLowerCase() === 'status')
         const updatedRaw = exists
           ? prev.rawFields.map((f) =>
               f.fieldName.toLowerCase() === 'status'
-                ? { ...f, value: optionName, optionId: optionId ?? null }
+                ? { ...f, value: optionName, optionId: optionId }
                 : f
             )
-          : [...prev.rawFields, { fieldName: 'Status', value: optionName, optionId: optionId ?? null }]
+          : [...prev.rawFields, { fieldName: 'Status', value: optionName, optionId: optionId }]
         return { ...prev, status: optionName, rawFields: updatedRaw }
       })
-      // Keep the board list in sync
-      updateTask(boardId, id, { status: optionName, statusOptionId: optionId ?? null })
+      // Keep the board list in sync (board screen sees the new status without refreshing)
+      updateTask(boardId, id, { status: optionName, statusOptionId: optionId })
+      // Haptic fires on user action, not after the API resolves
+      void Haptics.selectionAsync()
 
-      // Fire API in background — do NOT await here so the modal closes immediately
+      // Fire API in background — do NOT await here so EditFieldModal closes immediately
       void (async () => {
         try {
           const pat = await fetchGithubPAT(user.id)
           if (!pat) throw new Error('No token')
           await updateFieldValue(pat, boardId, id, statusFieldMapping.field.id, {
-            singleSelectOptionId: optionId ?? '',
+            singleSelectOptionId: optionId,
           })
-          await Haptics.selectionAsync()
         } catch {
           // Revert on failure
           setDetail((prev) => {
@@ -1125,7 +1136,7 @@ function styles(
     },
     errorToast: {
       position: 'absolute',
-      bottom: (hasTaskNav ? NAV_BAR_HEIGHT + bottomInset + spacing[3] : bottomInset + spacing[5]),
+      bottom: hasTaskNav ? NAV_BAR_HEIGHT + bottomInset + spacing[3] : bottomInset + spacing[5],
       left: spacing[5],
       right: spacing[5],
       backgroundColor: theme.colors.error,
