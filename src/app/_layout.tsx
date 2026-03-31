@@ -9,8 +9,12 @@ import { useAuthStore } from '../stores/auth-store'
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext'
 import { useOTAUpdates } from '../hooks/useOTAUpdates'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { initPurchases } from '../lib/purchases'
 
 SplashScreen.preventAutoHideAsync()
+
+// Initialise RevenueCat SDK as early as possible (requires dev build).
+initPurchases()
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuthStore()
