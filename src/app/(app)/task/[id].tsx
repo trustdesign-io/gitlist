@@ -535,7 +535,11 @@ function fieldRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
 // ---------------------------------------------------------------------------
 
 export default function TaskDetailScreen() {
-  const { id, boardId } = useLocalSearchParams<{ id: string; boardId?: string }>()
+  const { id, boardId, taskIds } = useLocalSearchParams<{
+    id: string
+    boardId?: string
+    taskIds?: string
+  }>()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
   const user = useCurrentUser()
@@ -549,6 +553,32 @@ export default function TaskDetailScreen() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeFieldMapping, setActiveFieldMapping] = useState<FieldMapping | null>(null)
+
+  // Task-to-task navigation
+  const orderedTaskIds = useMemo<string[]>(() => {
+    if (!taskIds) return []
+    return taskIds.split(',').filter(Boolean)
+  }, [taskIds])
+
+  const currentIndex = useMemo(
+    () => (id ? orderedTaskIds.indexOf(id) : -1),
+    [id, orderedTaskIds]
+  )
+
+  const hasPrev = currentIndex > 0
+  const hasNext = currentIndex >= 0 && currentIndex < orderedTaskIds.length - 1
+
+  const navigateToTask = useCallback(
+    (targetId: string) => {
+      // router.replace swaps the current screen in the stack so back still returns to the board,
+      // and ensures useLocalSearchParams updates reliably (more predictable than setParams).
+      router.replace({
+        pathname: '/(app)/task/[id]',
+        params: { id: targetId, boardId, taskIds },
+      })
+    },
+    [router, boardId, taskIds]
+  )
 
   const fieldMappings = boardId ? (fieldsByBoard[boardId] ?? []) : []
 
@@ -633,7 +663,10 @@ export default function TaskDetailScreen() {
     [id, boardId, user?.id]
   )
 
-  const s = useMemo(() => styles(theme, insets.bottom), [theme, insets.bottom])
+  const s = useMemo(
+    () => styles(theme, insets.bottom, orderedTaskIds.length > 1 && currentIndex >= 0),
+    [theme, insets.bottom, orderedTaskIds.length, currentIndex]
+  )
   const markdownStyles = useMemo(() => buildMarkdownStyles(theme), [theme])
 
   if (isLoading && !detail) {
@@ -798,11 +831,58 @@ export default function TaskDetailScreen() {
           theme={theme}
         />
       )}
+
+      {/* Task-to-task navigation bar — only shown when task is within the ordered list */}
+      {orderedTaskIds.length > 1 && currentIndex >= 0 && (
+        <View style={[s.navBar, { paddingBottom: insets.bottom + spacing[2] }]}>
+          <Pressable
+            style={[s.navButton, !hasPrev && s.navButtonDisabled]}
+            onPress={() => hasPrev && navigateToTask(orderedTaskIds[currentIndex - 1])}
+            disabled={!hasPrev}
+            accessibilityRole="button"
+            accessibilityLabel="Previous task"
+            accessibilityState={{ disabled: !hasPrev }}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={hasPrev ? theme.colors.primary : theme.colors.mutedForeground}
+            />
+            <Text style={[s.navButtonLabel, !hasPrev && s.navButtonLabelDisabled]}>Prev</Text>
+          </Pressable>
+
+          <Text style={s.navPosition}>
+            {currentIndex + 1} of {orderedTaskIds.length}
+          </Text>
+
+          <Pressable
+            style={[s.navButton, !hasNext && s.navButtonDisabled]}
+            onPress={() => hasNext && navigateToTask(orderedTaskIds[currentIndex + 1])}
+            disabled={!hasNext}
+            accessibilityRole="button"
+            accessibilityLabel="Next task"
+            accessibilityState={{ disabled: !hasNext }}
+          >
+            <Text style={[s.navButtonLabel, !hasNext && s.navButtonLabelDisabled]}>Next</Text>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={hasNext ? theme.colors.primary : theme.colors.mutedForeground}
+            />
+          </Pressable>
+        </View>
+      )}
     </>
   )
 }
 
-function styles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number) {
+const NAV_BAR_HEIGHT = 56
+
+function styles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  bottomInset: number,
+  hasTaskNav: boolean
+) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -810,7 +890,7 @@ function styles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number
     },
     content: {
       padding: spacing[5],
-      paddingBottom: bottomInset + spacing[8],
+      paddingBottom: hasTaskNav ? NAV_BAR_HEIGHT + bottomInset + spacing[4] : bottomInset + spacing[8],
     },
     centered: {
       justifyContent: 'center',
@@ -918,6 +998,42 @@ function styles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number
       lineHeight: fontSize.base.lineHeight,
       fontWeight: '600',
       color: colors.surface.background,
+    },
+    navBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing[4],
+      paddingTop: spacing[3],
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
+    },
+    navButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[1],
+      paddingVertical: spacing[2],
+      paddingHorizontal: spacing[3],
+      minWidth: 80,
+    },
+    navButtonDisabled: {
+      opacity: 0.4,
+    },
+    navButtonLabel: {
+      fontSize: fontSize.base.size,
+      lineHeight: fontSize.base.lineHeight,
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    navButtonLabelDisabled: {
+      color: theme.colors.mutedForeground,
+    },
+    navPosition: {
+      fontSize: fontSize.sm.size,
+      lineHeight: fontSize.sm.lineHeight,
+      color: theme.colors.mutedForeground,
+      fontWeight: '500',
     },
   })
 }
