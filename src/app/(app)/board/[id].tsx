@@ -17,9 +17,7 @@ import {
 } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import ReanimatedSwipeable, {
-  type SwipeableMethods,
-} from 'react-native-gesture-handler/ReanimatedSwipeable'
+import Swipeable from 'react-native-gesture-handler/Swipeable'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -333,12 +331,12 @@ function SwipeableRow({
   onComplete,
   onDelete,
 }: SwipeableRowProps) {
-  const swipeableRef = useRef<SwipeableMethods | null>(null)
+  const swipeableRef = useRef<Swipeable | null>(null)
 
   const handleSwipeOpen = useCallback(
     (direction: 'left' | 'right') => {
       if (direction === 'left') {
-        swipeableRef.current?.reset()
+        swipeableRef.current?.close()
         onComplete(task)
       } else {
         const truncated =
@@ -365,7 +363,7 @@ function SwipeableRow({
 
   return (
     <View style={rowStyles.padding}>
-      <ReanimatedSwipeable
+      <Swipeable
         ref={swipeableRef}
         renderLeftActions={canComplete ? () => <CompleteAction /> : undefined}
         renderRightActions={() => <DeleteAction />}
@@ -377,7 +375,7 @@ function SwipeableRow({
         overshootRight={false}
       >
         <TaskCard task={task} theme={theme} isCompleting={isCompleting} onPress={onPress} />
-      </ReanimatedSwipeable>
+      </Swipeable>
     </View>
   )
 }
@@ -1248,11 +1246,9 @@ export default function BoardScreen() {
   const [undoToastLabel, setUndoToastLabel] = useState('')
   const pendingUndo = useRef<PendingUndo | null>(null)
 
-  // Search + filter state — restored from MMKV on mount
+  // Search + filter state — restored from cache on mount
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeFilters, setActiveFilters] = useState<ActiveFilters>(() =>
-    id && id !== ALL_BOARDS_ID ? getPersistedFilters(id) : {}
-  )
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({})
   const [filterPickerKey, setFilterPickerKey] = useState<FilterKey | null>(null)
 
   const sectionListRef = useRef<SectionList<Task>>(null)
@@ -1275,11 +1271,22 @@ export default function BoardScreen() {
   const isAllBoards = id === ALL_BOARDS_ID
   const board = isAllBoards ? undefined : boards.find((b) => b.id === id)
 
+  // Load persisted filters on mount
+  useEffect(() => {
+    if (!id || id === ALL_BOARDS_ID) return
+    void (async () => {
+      const saved = await getPersistedFilters(id)
+      setActiveFilters(saved)
+    })()
+  }, [id])
+
   // Persist last-viewed board and record view timestamp
   useEffect(() => {
     if (!id || !user?.id || isAllBoards) return
-    setLastBoardId(user.id, id)
-    setLastViewedAt(user.id, id)
+    void (async () => {
+      await setLastBoardId(user.id, id)
+      await setLastViewedAt(user.id, id)
+    })()
   }, [id, user?.id, isAllBoards])
 
   // Set tappable header title + filter badge button
@@ -1320,7 +1327,7 @@ export default function BoardScreen() {
   const loadTasks = useCallback(async () => {
     if (!id || !user?.id || isAllBoards) return
 
-    const cached = getCached<Task[]>(['tasks', user.id, id])
+    const cached = await getCached<Task[]>(['tasks', user.id, id])
     if (cached) {
       setTasks(id, cached)
     }
@@ -1337,7 +1344,7 @@ export default function BoardScreen() {
         fetchBoardItems(pat, id),
         fetchBoardFields(pat, user.id, id),
       ])
-      setCached(['tasks', user.id, id], result)
+      await setCached(['tasks', user.id, id], result)
       setTasks(id, result)
       setFields(id, fields)
     } catch (err) {
@@ -1366,7 +1373,7 @@ export default function BoardScreen() {
         return
       }
       for (const b of boards) {
-        const cached = getCached<Task[]>(['tasks', user.id, b.id])
+        const cached = await getCached<Task[]>(['tasks', user.id, b.id])
         if (cached && !tasksByBoard[b.id]) {
           setTasks(b.id, cached)
         }
@@ -1375,7 +1382,7 @@ export default function BoardScreen() {
       await Promise.all(
         unloaded.map(async (b) => {
           const result = await fetchBoardItems(pat, b.id)
-          setCached(['tasks', user.id, b.id], result)
+          await setCached(['tasks', user.id, b.id], result)
           setTasks(b.id, result)
         })
       )
@@ -1387,7 +1394,7 @@ export default function BoardScreen() {
 
   const loadStatusField = useCallback(async () => {
     if (!id || !user?.id) return
-    const cached = getCached<StatusField>(['status-field', id])
+    const cached = await getCached<StatusField>(['status-field', id])
     if (cached) {
       setStatusFieldState(cached)
       return
@@ -1397,7 +1404,7 @@ export default function BoardScreen() {
       if (!pat) return
       const field = await fetchStatusField(pat, id)
       if (field) {
-        setCached(['status-field', id], field)
+        await setCached(['status-field', id], field)
         setStatusFieldState(field)
       }
     } catch {
@@ -1499,7 +1506,7 @@ export default function BoardScreen() {
         replaceTask(id, tempId, realTask)
 
         const current = useTasksStore.getState().tasksByBoard[id] ?? []
-        setCached(['tasks', user.id, id], current)
+        await setCached(['tasks', user.id, id], current)
       } catch (err) {
         removeTask(id, tempId)
         throw err
@@ -1644,11 +1651,11 @@ export default function BoardScreen() {
     hideUndoToast()
   }, [insertTask, hideUndoToast])
 
-  // Persist filter changes to MMKV
+  // Persist filter changes to cache
   const updateFilters = useCallback(
     (next: ActiveFilters) => {
       setActiveFilters(next)
-      if (id) setPersistedFilters(id, next)
+      if (id) void setPersistedFilters(id, next)
     },
     [id]
   )

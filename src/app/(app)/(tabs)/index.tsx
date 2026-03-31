@@ -7,7 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { useCurrentUser } from '../../../hooks/use-current-user'
@@ -164,7 +164,7 @@ export default function BoardsScreen() {
   const loadBoards = useCallback(async () => {
     if (!user?.id) return
 
-    const cached = getCached<Board[]>(['boards', user.id])
+    const cached = await getCached<Board[]>(['boards', user.id])
     if (cached) {
       setBoards(cached)
     }
@@ -178,7 +178,7 @@ export default function BoardsScreen() {
         return
       }
       const result = await fetchUserBoards(pat)
-      setCached(['boards', user.id], result)
+      await setCached(['boards', user.id], result)
       setBoards(result)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -201,11 +201,13 @@ export default function BoardsScreen() {
   // On first render, redirect to the last-viewed board if one is saved
   useEffect(() => {
     if (!user?.id || didRedirect.current) return
-    const lastId = getLastBoardId(user.id)
-    if (lastId) {
-      didRedirect.current = true
-      router.push({ pathname: '/(app)/board/[id]', params: { id: lastId } })
-    }
+    void (async () => {
+      const lastId = await getLastBoardId(user.id)
+      if (lastId) {
+        didRedirect.current = true
+        router.push({ pathname: '/(app)/board/[id]', params: { id: lastId } })
+      }
+    })()
   }, [user?.id, router])
 
   const onRefresh = useCallback(() => {
@@ -219,19 +221,22 @@ export default function BoardsScreen() {
     [router]
   )
 
-  // Compute unread state per board based on MMKV last-viewed timestamps
-  const unreadBoardIds = useMemo(() => {
-    if (!user?.id) return new Set<string>()
-    const ids = new Set<string>()
-    for (const board of boards) {
-      const lastViewedAt = getLastViewedAt(user.id, board.id)
-      if (lastViewedAt === null) continue // Never viewed — not "unread", just new
-      const boardUpdatedAt = new Date(board.updatedAt).getTime()
-      if (boardUpdatedAt > lastViewedAt) {
-        ids.add(board.id)
+  // Compute unread state per board based on last-viewed timestamps
+  const [unreadBoardIds, setUnreadBoardIds] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!user?.id) return
+    void (async () => {
+      const ids = new Set<string>()
+      for (const board of boards) {
+        const lastViewed = await getLastViewedAt(user.id, board.id)
+        if (lastViewed === null) continue // Never viewed — not "unread", just new
+        const boardUpdatedAt = new Date(board.updatedAt).getTime()
+        if (boardUpdatedAt > lastViewed) {
+          ids.add(board.id)
+        }
       }
-    }
-    return ids
+      setUnreadBoardIds(ids)
+    })()
   }, [boards, user?.id])
 
   if (isLoading && boards.length === 0) {

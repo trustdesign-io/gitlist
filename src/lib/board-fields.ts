@@ -129,7 +129,7 @@ function buildMapping(field: BoardField): FieldMapping {
 
 /**
  * Fetch all field definitions for a ProjectV2 board and return their
- * UI mappings. Results are cached in MMKV with a 24-hour TTL (same as tasks).
+ * UI mappings. Results are cached with a 24-hour TTL (same as tasks).
  */
 export async function fetchBoardFields(
   pat: string,
@@ -137,7 +137,7 @@ export async function fetchBoardFields(
   projectId: string
 ): Promise<FieldMapping[]> {
   const cacheKey = ['fields', userId, projectId]
-  const cached = getCached<FieldMapping[]>(cacheKey)
+  const cached = await getCached<FieldMapping[]>(cacheKey)
   if (cached) return cached
 
   const data = await githubGraphQL<FetchBoardFieldsResponse>(
@@ -160,7 +160,7 @@ export async function fetchBoardFields(
       return buildMapping(field)
     })
 
-  setCached(cacheKey, mappings)
+  await setCached(cacheKey, mappings)
   return mappings
 }
 
