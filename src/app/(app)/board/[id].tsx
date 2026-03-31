@@ -154,8 +154,33 @@ interface TaskCardProps {
   onPress: () => void
 }
 
+const PRIORITY_FIELD_NAMES = ['priority', 'urgency']
+const DUE_DATE_FIELD_NAMES = ['due date', 'due', 'deadline']
+
+function formatDueDate(iso: string): string {
+  const date = new Date(iso)
+  if (isNaN(date.getTime())) return iso
+  const now = new Date()
+  const diffDays = Math.round((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Tomorrow'
+  if (diffDays === -1) return 'Yesterday'
+  if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`
+  if (diffDays <= 7) return `${diffDays}d`
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 function TaskCard({ task, theme, isCompleting, onPress }: TaskCardProps) {
   const s = useMemo(() => taskCardStyles(theme), [theme])
+
+  const priority = task.fieldValues.find((fv) =>
+    PRIORITY_FIELD_NAMES.includes(fv.fieldName.toLowerCase())
+  )
+  const dueDate = task.fieldValues.find((fv) =>
+    DUE_DATE_FIELD_NAMES.includes(fv.fieldName.toLowerCase())
+  )
+  const isOverdue = dueDate != null && new Date(dueDate.value) < new Date()
+
   return (
     <Pressable
       onPress={onPress}
@@ -180,6 +205,42 @@ function TaskCard({ task, theme, isCompleting, onPress }: TaskCardProps) {
             {task.labels.map((label) => (
               <LabelChip key={label.name} name={label.name} color={label.color} />
             ))}
+          </View>
+        )}
+
+        {(priority != null || dueDate != null) && (
+          <View style={s.fieldRow}>
+            {priority != null && (
+              <View
+                style={[
+                  s.priorityBadge,
+                  priority.color
+                    ? { backgroundColor: `#${priority.color}26` }
+                    : { backgroundColor: theme.colors.muted },
+                ]}
+              >
+                <Text
+                  style={[
+                    s.priorityLabel,
+                    { color: priority.color ? `#${priority.color}` : theme.colors.foreground },
+                  ]}
+                >
+                  {priority.value}
+                </Text>
+              </View>
+            )}
+            {dueDate != null && (
+              <View style={[s.dueDateBadge, isOverdue && s.dueDateOverdue]}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={11}
+                  color={isOverdue ? colors.semantic.error : theme.colors.mutedForeground}
+                />
+                <Text style={[s.dueDateLabel, isOverdue && s.dueDateLabelOverdue]}>
+                  {formatDueDate(dueDate.value)}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -233,6 +294,37 @@ function taskCardStyles(theme: ReturnType<typeof useTheme>['theme']) {
       flexWrap: 'wrap',
       gap: spacing[1],
       marginTop: spacing[2],
+    },
+    fieldRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing[2],
+      marginTop: spacing[2],
+      alignItems: 'center',
+    },
+    priorityBadge: {
+      borderRadius: 99,
+      paddingHorizontal: spacing[2],
+      paddingVertical: 2,
+    },
+    priorityLabel: {
+      fontSize: fontSize.xs.size,
+      lineHeight: fontSize.xs.lineHeight,
+      fontWeight: '600',
+    },
+    dueDateBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+    },
+    dueDateOverdue: {},
+    dueDateLabel: {
+      fontSize: fontSize.xs.size,
+      lineHeight: fontSize.xs.lineHeight,
+      color: theme.colors.mutedForeground,
+    },
+    dueDateLabelOverdue: {
+      color: colors.semantic.error,
     },
     assignees: {
       flexDirection: 'row',
@@ -1487,6 +1579,7 @@ export default function BoardScreen() {
         issueNumber: null,
         issueState: null,
         isDraft: true,
+        fieldValues: [],
       }
       prependTask(id, optimisticTask)
 

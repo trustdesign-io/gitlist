@@ -161,6 +161,16 @@ export interface TaskLabel {
   color: string
 }
 
+export interface TaskFieldValue {
+  fieldName: string
+  /** Display value (option name, date string, text, etc.) */
+  value: string
+  /** Populated for single-select fields */
+  optionId?: string
+  /** Populated for single-select fields (hex colour from GitHub) */
+  color?: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -173,6 +183,8 @@ export interface Task {
   issueNumber: number | null
   issueState: 'OPEN' | 'CLOSED' | null
   isDraft: boolean
+  /** All custom field values fetched with the board items query */
+  fieldValues: TaskFieldValue[]
 }
 
 export interface BoardColumn {
@@ -194,9 +206,19 @@ interface FieldNode {
 }
 
 interface FieldValueNode {
+  __typename?: string
   field?: { name?: string }
+  /** Single-select: option name */
   name?: string
   optionId?: string
+  /** Single-select: option colour */
+  color?: string
+  /** Date field value */
+  date?: string
+  /** Text field value */
+  text?: string
+  /** Number field value */
+  number?: number
 }
 
 type ItemContent =
@@ -250,9 +272,26 @@ const FETCH_BOARD_ITEMS_QUERY = `
             fieldValues(first: 20) {
               nodes {
                 ... on ProjectV2ItemFieldSingleSelectValue {
+                  __typename
                   field { ... on ProjectV2SingleSelectField { name } }
                   name
                   optionId
+                  color
+                }
+                ... on ProjectV2ItemFieldDateValue {
+                  __typename
+                  field { ... on ProjectV2FieldCommon { name } }
+                  date
+                }
+                ... on ProjectV2ItemFieldTextValue {
+                  __typename
+                  field { ... on ProjectV2FieldCommon { name } }
+                  text
+                }
+                ... on ProjectV2ItemFieldNumberValue {
+                  __typename
+                  field { ... on ProjectV2FieldCommon { name } }
+                  number
                 }
               }
             }
@@ -278,10 +317,27 @@ const FETCH_BOARD_ITEMS_QUERY = `
   }
 `
 
+function extractFieldValues(nodes: FieldValueNode[]): TaskFieldValue[] {
+  const values: TaskFieldValue[] = []
+  for (const fv of nodes) {
+    const fieldName = fv.field?.name
+    if (!fieldName) continue
+    if (fv.__typename === 'ProjectV2ItemFieldSingleSelectValue' && fv.name != null) {
+      values.push({ fieldName, value: fv.name, optionId: fv.optionId, color: fv.color })
+    } else if (fv.__typename === 'ProjectV2ItemFieldDateValue' && fv.date != null) {
+      values.push({ fieldName, value: fv.date })
+    } else if (fv.__typename === 'ProjectV2ItemFieldTextValue' && fv.text != null) {
+      values.push({ fieldName, value: fv.text })
+    } else if (fv.__typename === 'ProjectV2ItemFieldNumberValue' && fv.number != null) {
+      values.push({ fieldName, value: String(fv.number) })
+    }
+  }
+  return values
+}
+
 function mapItem(item: ItemNode): Task {
-  const statusFieldValue = item.fieldValues.nodes.find(
-    (fv) => fv.field?.name?.toLowerCase() === 'status' && fv.name != null
-  )
+  const fieldValues = extractFieldValues(item.fieldValues.nodes)
+  const statusFieldValue = fieldValues.find((fv) => fv.fieldName.toLowerCase() === 'status')
 
   const content = item.content
 
@@ -289,13 +345,14 @@ function mapItem(item: ItemNode): Task {
     return {
       id: item.id,
       title: '(No title)',
-      status: statusFieldValue?.name ?? null,
+      status: statusFieldValue?.value ?? null,
       statusOptionId: statusFieldValue?.optionId ?? null,
       assignees: [],
       labels: [],
       issueNumber: null,
       issueState: null,
       isDraft: true,
+      fieldValues,
     }
   }
 
@@ -303,13 +360,14 @@ function mapItem(item: ItemNode): Task {
     return {
       id: item.id,
       title: content.title,
-      status: statusFieldValue?.name ?? null,
+      status: statusFieldValue?.value ?? null,
       statusOptionId: statusFieldValue?.optionId ?? null,
       assignees: content.assignees.nodes,
       labels: content.labels.nodes,
       issueNumber: content.number,
       issueState: content.state,
       isDraft: false,
+      fieldValues,
     }
   }
 
@@ -317,13 +375,14 @@ function mapItem(item: ItemNode): Task {
   return {
     id: item.id,
     title: content.title,
-    status: statusFieldValue?.name ?? null,
+    status: statusFieldValue?.value ?? null,
     statusOptionId: statusFieldValue?.optionId ?? null,
     assignees: [],
     labels: [],
     issueNumber: null,
     issueState: null,
     isDraft: true,
+    fieldValues,
   }
 }
 
