@@ -1866,6 +1866,12 @@ export default function BoardScreen() {
     [filteredColumns]
   )
 
+  // Flat ordered list of visible task IDs — passed to task detail for prev/next navigation
+  const filteredTaskIds = useMemo(
+    () => filteredColumns.flatMap((col) => col.tasks.map((t) => t.id)).join(','),
+    [filteredColumns]
+  )
+
   const allBoardsSections = useMemo(() => {
     if (!isAllBoards) return []
     return boards
@@ -1911,12 +1917,14 @@ export default function BoardScreen() {
               <TaskCard
                 task={item}
                 theme={theme}
-                onPress={() =>
+                onPress={() => {
+                  const sec = section as { boardId: string; data: { id: string }[] }
+                  const sectionTaskIds = sec.data.map((t) => t.id).join(',')
                   router.push({
                     pathname: '/(app)/task/[id]',
-                    params: { id: item.id, boardId: (section as { boardId: string }).boardId },
+                    params: { id: item.id, boardId: sec.boardId, taskIds: sectionTaskIds },
                   })
-                }
+                }}
               />
             </View>
           )}
@@ -2061,7 +2069,7 @@ export default function BoardScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/(app)/task/[id]',
-                    params: { id: item.id, boardId: id },
+                    params: { id: item.id, boardId: id, taskIds: filteredTaskIds },
                   })
                 }
                 onComplete={handleComplete}
