@@ -15,10 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "io.trustdesign.gitlist",
-      "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera to let you take photos.",
-        "NSPhotoLibraryUsageDescription": "This app accesses your photos to let you share images."
-      }
+      "buildNumber": "1"
     },
     "android": {
       "package": "io.trustdesign.gitlist",

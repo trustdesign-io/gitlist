@@ -13,7 +13,9 @@
     "test": "jest",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
-    "release:major": "node scripts/release.mjs major"
+    "release:major": "node scripts/release.mjs major",
+    "eas:build": "eas build --profile production --platform ios",
+    "eas:submit": "eas submit --profile production --platform ios --latest"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
