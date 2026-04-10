@@ -22,7 +22,7 @@ export default function AppLayout() {
       />
       <Stack.Screen
         name="paywall"
-        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+        options={{ headerShown: true, title: '', presentation: 'modal', headerBackVisible: true }}
       />
     </Stack>
   )

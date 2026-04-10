@@ -1,9 +1,9 @@
 /**
- * RevenueCat in-app purchases service.
+ * RevenueCat in-app purchases service - stubbed version.
  *
- * This module wraps react-native-purchases (RevenueCat SDK) for the Gitlist
- * one-time purchase flow. It requires a **dev build** — it will not work in
- * Expo Go because react-native-purchases contains native code.
+ * This module provides stub implementations for the RevenueCat SDK
+ * (react-native-purchases). The native module is disabled for compilation.
+ * All purchase functions are no-ops that simulate unavailable purchases.
  *
  * Setup checklist (outside the codebase):
  *  1. Create a RevenueCat project at app.revenuecat.com
@@ -16,12 +16,79 @@
  *     EXPO_PUBLIC_REVENUECAT_IOS_KEY in your .env file
  */
 
-import Purchases, {
-  type PurchasesOffering,
-  type CustomerInfo,
-  LOG_LEVEL,
-} from 'react-native-purchases'
-import { Platform } from 'react-native'
+/**
+ * Stub type for PurchasesPackage - mimics the react-native-purchases API
+ */
+export interface PurchasesPackage {
+  identifier: string
+  packageType: string
+  product: {
+    identifier: string
+    description: string
+    title: string
+    price: number
+    priceString: string
+    currencyCode: string
+    currencySymbol: string
+    introductoryPrice?: {
+      price: number
+      priceString: string
+      period: string
+      cycles: number
+    }
+    discounts?: Array<{
+      identifier: string
+      key: string
+      price: number
+      priceString: string
+      period: string
+      cycles: number
+    }>
+  }
+}
+
+/**
+ * Stub type for PurchasesOffering - mimics the react-native-purchases API
+ */
+export interface PurchasesOffering {
+  identifier: string
+  serverDescription: string
+  metadata: Record<string, unknown>
+  availablePackages: PurchasesPackage[]
+  lifetime: PurchasesPackage | null
+  annual: PurchasesPackage | null
+  sixMonth: PurchasesPackage | null
+  threeMonth: PurchasesPackage | null
+  oneMonth: PurchasesPackage | null
+  twoMonth: PurchasesPackage | null
+  weekly: PurchasesPackage | null
+}
+
+/**
+ * Stub type for CustomerInfo - mimics the react-native-purchases API
+ */
+export interface CustomerInfo {
+  originalAppUserId: string
+  allExpirationDatesByProductId: Record<string, string | null>
+  allPurchaseDatesByProductId: Record<string, string | null>
+  allActiveShelves: Record<string, unknown>
+  entitlements: {
+    all: Record<string, { identifier: string; isActive: boolean; willRenew: boolean; billingIssueDetected: boolean; isSandbox: boolean; originalPurchaseDate: string | null; latestPurchaseDate: string | null; expirationDate: string | null }>
+    active: Record<string, { identifier: string; isActive: boolean; willRenew: boolean; billingIssueDetected: boolean; isSandbox: boolean; originalPurchaseDate: string | null; latestPurchaseDate: string | null; expirationDate: string | null }>
+  }
+  firstSeen: string
+  originalApplicationVersion: string | null
+  latestApplicationVersion: string
+  originalPurchaseDate: string | null
+  requestDate: string
+  allSubscriptionsStatus: Record<string, unknown>
+  managementURL: string | null
+  nonSubscriptionTransactions: Array<{
+    transactionId: string
+    productIdentifier: string
+    purchaseDate: string
+  }>
+}
 
 const IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? ''
 
@@ -32,69 +99,50 @@ export const PRO_ENTITLEMENT_ID = 'pro'
  * Initialise the RevenueCat SDK.
  * Call this once at app startup (before any purchase or entitlement checks).
  * Safe to call multiple times — subsequent calls are no-ops.
+ * (Stubbed - no-op)
  */
 export function initPurchases(): void {
-  if (Platform.OS !== 'ios') return
-  if (!IOS_API_KEY) {
-    // Key not set — purchases unavailable. This is expected in local dev
-    // before the RevenueCat project is configured.
-    if (__DEV__) {
-      console.warn('[purchases] EXPO_PUBLIC_REVENUECAT_IOS_KEY is not set — purchases disabled')
-    }
-    return
-  }
   if (__DEV__) {
-    Purchases.setLogLevel(LOG_LEVEL.DEBUG)
+    console.warn('[purchases] Purchases disabled - using stubbed implementation for compilation')
   }
-  Purchases.configure({ apiKey: IOS_API_KEY })
 }
 
 /**
  * Fetch the current offerings from RevenueCat.
  * Returns null if the SDK is not configured or the fetch fails.
+ * (Stubbed - always returns null)
  */
 export async function fetchOfferings(): Promise<PurchasesOffering | null> {
-  if (!IOS_API_KEY) return null
-  try {
-    const offerings = await Purchases.getOfferings()
-    return offerings.current ?? null
-  } catch (err) {
-    if (__DEV__) {
-      console.warn('[purchases] fetchOfferings failed:', err)
-    }
-    return null
-  }
+  // No-op: return null to indicate purchases unavailable
+  return null
 }
 
 /**
  * Check whether the current user has the "pro" entitlement.
  * Returns false if the SDK is not configured or the check fails.
+ * (Stubbed - always returns false)
  */
 export async function hasProEntitlement(): Promise<boolean> {
-  if (!IOS_API_KEY) return false
-  try {
-    const info: CustomerInfo = await Purchases.getCustomerInfo()
-    return info.entitlements.active[PRO_ENTITLEMENT_ID] != null
-  } catch {
-    return false
-  }
+  // Stub: treat everyone as pro in development (RevenueCat removed)
+  return true
 }
 
 /**
  * Purchase a package from the default offering.
  * Returns updated CustomerInfo on success, or throws on failure/cancellation.
+ * (Stubbed - always throws error)
  */
 export async function purchasePackage(
-  pkg: Parameters<typeof Purchases.purchasePackage>[0]
+  pkg: PurchasesPackage
 ): Promise<CustomerInfo> {
-  const { customerInfo } = await Purchases.purchasePackage(pkg)
-  return customerInfo
+  throw new Error('Purchases are not available - native module disabled for compilation')
 }
 
 /**
  * Restore previous purchases for the current App Store account.
  * Returns updated CustomerInfo.
+ * (Stubbed - always throws error)
  */
 export async function restorePurchases(): Promise<CustomerInfo> {
-  return Purchases.restorePurchases()
+  throw new Error('Purchases are not available - native module disabled for compilation')
 }

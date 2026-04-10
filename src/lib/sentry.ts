@@ -1,39 +1,30 @@
-import * as SentryNative from '@sentry/react-native'
-
-const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN
+/**
+ * Sentry error tracking - stubbed version (native module disabled for compilation).
+ * All functions are no-ops to allow the app to compile without the @sentry/react-native module.
+ */
 
 export function initSentry(): void {
-  if (__DEV__ || !dsn) return
-  SentryNative.init({
-    dsn,
-    enabled: !__DEV__,
-    environment: process.env.EXPO_PUBLIC_APP_VARIANT ?? 'production',
-    tracesSampleRate: 0.2,
-  })
+  // No-op: Sentry initialization disabled
 }
 
 export const Sentry = {
   captureException: (error: unknown, extra?: Record<string, unknown>): void => {
-    if (__DEV__ || !dsn) return
-    SentryNative.captureException(error, extra ? { extra } : undefined)
+    // No-op: exception capture disabled
   },
   wrap: <T>(component: T): T => {
-    if (__DEV__ || !dsn) return component
-    return SentryNative.wrap(component as Parameters<typeof SentryNative.wrap>[0]) as T
+    // No-op: return component as-is
+    return component
   },
 }
 
 export function sentryIdentifyUser(id: string, email: string): void {
-  if (__DEV__ || !dsn) return
-  SentryNative.setUser({ id, email })
+  // No-op: user identification disabled
 }
 
 export function sentryClearUser(): void {
-  if (__DEV__ || !dsn) return
-  SentryNative.setUser(null)
+  // No-op: user clear disabled
 }
 
 export function sentryTrackSignUp(): void {
-  if (__DEV__ || !dsn) return
-  SentryNative.addBreadcrumb({ category: 'auth', message: 'User signed up', level: 'info' })
+  // No-op: sign-up tracking disabled
 }

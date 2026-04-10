@@ -10,6 +10,7 @@ import { ThemeProvider, useTheme } from '../contexts/ThemeContext'
 import { useOTAUpdates } from '../hooks/useOTAUpdates'
 import { useEntitlementCheck } from '../hooks/useEntitlementCheck'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { initPurchases } from '../lib/purchases'
 import { initSentry } from '../lib/sentry'
 import { initAnalytics } from '../lib/analytics'
@@ -68,15 +69,17 @@ function RootLayoutNav() {
 
 function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ErrorBoundary>
-        <ThemeProvider>
-          <AuthProvider>
-            <RootLayoutNav />
-          </AuthProvider>
-        </ThemeProvider>
-      </ErrorBoundary>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ErrorBoundary>
+          <ThemeProvider>
+            <AuthProvider>
+              <RootLayoutNav />
+            </AuthProvider>
+          </ThemeProvider>
+        </ErrorBoundary>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   )
 }
 

@@ -10,7 +10,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Ionicons from '@expo/vector-icons/Ionicons'
-import type { PurchasesPackage } from 'react-native-purchases'
 import { colors, fontSize, spacing, borderRadius } from '@trustdesign/shared/tokens'
 import { useTheme } from '../../../contexts/ThemeContext'
 import {
@@ -18,6 +17,7 @@ import {
   purchasePackage,
   restorePurchases,
   PRO_ENTITLEMENT_ID,
+  type PurchasesPackage,
 } from '../../../lib/purchases'
 import { captureEvent } from '../../../lib/analytics'
 

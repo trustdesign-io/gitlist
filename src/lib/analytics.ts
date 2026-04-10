@@ -1,21 +1,14 @@
-import PostHog from 'posthog-react-native'
-
-const apiKey = process.env.EXPO_PUBLIC_POSTHOG_API_KEY
-
-let client: PostHog | null = null
+/**
+ * PostHog analytics - stubbed version (native module disabled for compilation).
+ * All functions are no-ops to allow the app to compile without the posthog-react-native module.
+ */
 
 /**
  * Initialise PostHog. Call once at app startup (after Sentry).
  * No-ops in dev or when the API key is not configured.
  */
 export function initAnalytics(): void {
-  if (__DEV__ || !apiKey) return
-  try {
-    client = new PostHog(apiKey, { host: 'https://us.i.posthog.com' })
-  } catch {
-    // Defensive: any unexpected SDK init failure must not crash the app
-    // before error boundaries are mounted.
-  }
+  // No-op: PostHog initialization disabled
 }
 
 /**
@@ -23,8 +16,7 @@ export function initAnalytics(): void {
  * Path is the Expo Router pathname — no user identifiers are included.
  */
 export function captureScreen(path: string): void {
-  if (!client) return
-  client.screen(path, { path })
+  // No-op: screen tracking disabled
 }
 
 /** Tracked event names — kept in one place to avoid typos. */
@@ -43,6 +35,5 @@ export function captureEvent(
   event: AnalyticsEvent,
   props?: Record<string, string | number | boolean>
 ): void {
-  if (!client) return
-  client.capture(event, props)
+  // No-op: event capture disabled
 }

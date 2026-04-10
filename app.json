@@ -2,6 +2,7 @@
   "expo": {
     "name": "Gitlist",
     "slug": "gitlist",
+    "owner": "trustdesign-io",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,7 +16,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "io.trustdesign.gitlist",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "io.trustdesign.gitlist",
@@ -62,25 +66,19 @@
           "imageWidth": 200
         }
       ],
-      "expo-web-browser",
-      "@sentry/react-native"
+      "expo-web-browser"
     ],
     "updates": {
-      "url": "https://u.expo.dev/285003f0-7bb7-49dc-9cd9-d676ee46b3f9",
-      "fallbackToCacheTimeout": 5000
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
+      "enabled": false
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "285003f0-7bb7-49dc-9cd9-d676ee46b3f9"
-      },
-      "router": {}
+        "projectId": "e61b992a-9601-49ad-b6d4-3eac040ce512"
+      }
     },
     "experiments": {
       "typedRoutes": true
-    },
-    "owner": "designtechnologist"
+    }
   }
 }
